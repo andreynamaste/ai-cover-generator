@@ -195,6 +195,25 @@ SOCIAL_MEDIA_SIZES = {
     }
 }
 
+# Форматы изображений
+IMAGE_FORMATS = {
+    "realistic": {
+        "name": "Реалистичный",
+        "prompt_suffix": "photorealistic, realistic photography, high detail, natural lighting, professional photo quality, lifelike",
+        "icon": "📸"
+    },
+    "cartoon": {
+        "name": "Мультяшный",
+        "prompt_suffix": "cartoon style, animated, colorful, playful, stylized illustration, 2D animation style, vibrant colors",
+        "icon": "🎨"
+    },
+    "anime": {
+        "name": "Аниме",
+        "prompt_suffix": "anime style, manga art, Japanese animation, cel-shaded, vibrant anime colors, detailed anime illustration",
+        "icon": "🎌"
+    }
+}
+
 # Стили дизайна
 DESIGN_STYLES = {
     "modern": {"name": "Современный", "prompt_prefix": "Modern minimalist design with clean lines, bold typography, gradient backgrounds,", "icon": "✨"},
@@ -429,6 +448,7 @@ def index():
     return render_template('index.html', 
                          sizes=SOCIAL_MEDIA_SIZES,
                          styles=DESIGN_STYLES,
+                         formats=IMAGE_FORMATS,
                          examples=PROMPT_EXAMPLES,
                          username=session.get('username'),
                          has_token=has_token)
@@ -454,6 +474,7 @@ def generate_cover():
         data = request.json
         platform = data.get('platform', 'youtube_thumbnail')
         style = data.get('style', 'modern')
+        image_format = data.get('format', 'realistic')  # realistic, cartoon, anime
         user_prompt = data.get('prompt', '')
         
         # Получаем ссылки на референсные изображения (до 3 штук)
@@ -466,8 +487,10 @@ def generate_cover():
         
         size_config = SOCIAL_MEDIA_SIZES.get(platform, SOCIAL_MEDIA_SIZES['youtube_thumbnail'])
         style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
+        format_config = IMAGE_FORMATS.get(image_format, IMAGE_FORMATS['realistic'])
         
-        full_prompt = f"{style_config['prompt_prefix']} {user_prompt}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
+        # Собираем полный промпт с форматом
+        full_prompt = f"{style_config['prompt_prefix']} {user_prompt}, {format_config['prompt_suffix']}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
         
         headers = {
             'Authorization': f'Bearer {api_token}',
@@ -587,6 +610,63 @@ def check_status(task_id):
             conn.close()
             return jsonify({'error': 'Failed to check status'}), 400
             
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/generate-prompt', methods=['POST'])
+@app.route('/covers/api/generate-prompt', methods=['POST'])
+@login_required
+def generate_prompt():
+    """Генератор профессиональных промптов на основе темы и желаний пользователя"""
+    try:
+        data = request.json
+        topic = data.get('topic', '').strip()
+        description = data.get('description', '').strip()
+        platform = data.get('platform', 'youtube_banner')
+        style = data.get('style', 'modern')
+        image_format = data.get('format', 'realistic')
+        
+        if not topic:
+            return jsonify({'error': 'Укажите тему обложки'}), 400
+        
+        # Получаем конфигурации
+        size_config = SOCIAL_MEDIA_SIZES.get(platform, SOCIAL_MEDIA_SIZES['youtube_banner'])
+        style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
+        format_config = IMAGE_FORMATS.get(image_format, IMAGE_FORMATS['realistic'])
+        
+        # Генерируем профессиональный промпт
+        prompt_parts = []
+        
+        # Основная тема
+        prompt_parts.append(topic)
+        
+        # Дополнительное описание если есть
+        if description:
+            prompt_parts.append(description)
+        
+        # Стиль дизайна
+        prompt_parts.append(style_config['prompt_prefix'])
+        
+        # Формат изображения
+        prompt_parts.append(format_config['prompt_suffix'])
+        
+        # Технические параметры
+        prompt_parts.append(f"high quality, professional design, {size_config['width']}x{size_config['height']} pixels")
+        
+        # Собираем финальный промпт
+        generated_prompt = ", ".join(prompt_parts)
+        
+        return jsonify({
+            'success': True,
+            'prompt': generated_prompt,
+            'suggestions': [
+                f"Добавьте больше деталей о {topic}",
+                f"Укажите цветовую гамму",
+                f"Опишите настроение (энергичное, спокойное, драматичное)"
+            ]
+        })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

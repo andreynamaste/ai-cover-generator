@@ -591,6 +591,201 @@
         }
         
         .error-message h4 { margin-bottom: 10px; }
+        
+        /* Format Selection */
+        .format-btn {
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 8px 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--white);
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .format-btn:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .format-btn.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        /* Prompt Generator */
+        .prompt-generator-section {
+            background: var(--dark-light);
+            border-radius: 16px;
+            padding: 0;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 25px;
+            overflow: hidden;
+        }
+        
+        .prompt-generator-header {
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.3s;
+            background: rgba(99, 102, 241, 0.05);
+        }
+        
+        .prompt-generator-header:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .prompt-generator-header h3 {
+            font-size: 1.1rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .prompt-generator-content {
+            padding: 25px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .generator-hint {
+            color: var(--gray);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        
+        .generator-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .input-group label {
+            font-size: 0.9rem;
+            color: var(--white);
+            font-weight: 500;
+        }
+        
+        .input-group input,
+        .input-group textarea {
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+        
+        .input-group input:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .input-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .generate-prompt-btn {
+            padding: 14px 25px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .generate-prompt-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .generated-prompt-box {
+            margin-top: 20px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .generated-prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .generated-prompt-header span {
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        .prompt-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            padding: 8px 15px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .action-btn.accept {
+            background: var(--success);
+            color: var(--white);
+        }
+        
+        .action-btn.regenerate {
+            background: var(--primary);
+            color: var(--white);
+        }
+        
+        .action-btn.edit {
+            background: rgba(255,255,255,0.1);
+            color: var(--white);
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .generated-prompt-text {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            color: var(--white);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
     </style>
 </head>
 <body>
@@ -654,6 +849,25 @@
                     </div>
                 </div>
                 
+                <!-- Format Selection -->
+                <div class="card">
+                    <h3>🎭 Формат изображения</h3>
+                    <div class="style-list">
+                        <button class="format-btn active" data-format="realistic">
+                            <span>📸</span>
+                            <span>Реалистичный</span>
+                        </button>
+                        <button class="format-btn" data-format="cartoon">
+                            <span>🎨</span>
+                            <span>Мультяшный</span>
+                        </button>
+                        <button class="format-btn" data-format="anime">
+                            <span>🎌</span>
+                            <span>Аниме</span>
+                        </button>
+                                </div>
+                            </div>
+                
                 <!-- Quick Examples -->
                 <div class="card">
                     <h3>💡 Примеры промптов</h3>
@@ -669,6 +883,41 @@
             
             <!-- Main Content -->
             <main class="main-content">
+                <!-- Prompt Generator -->
+                <div class="prompt-generator-section">
+                    <div class="prompt-generator-header" onclick="togglePromptGenerator()">
+                        <h3>🤖 Генератор промптов</h3>
+                        <span class="toggle-icon" id="prompt-toggle-icon">▼</span>
+                    </div>
+                    <div class="prompt-generator-content" id="prompt-generator-content" style="display: none;">
+                        <p class="generator-hint">Опишите тему и желания - мы создадим профессиональный промпт для генерации!</p>
+                        <div class="generator-inputs">
+                            <div class="input-group">
+                                <label>🎯 Тема обложки *</label>
+                                <input type="text" id="generator-topic" placeholder="Например: игровой канал, фитнес блог, кулинария...">
+                            </div>
+                            <div class="input-group">
+                                <label>📝 Что вы хотите видеть?</label>
+                                <textarea id="generator-description" placeholder="Опишите детали, цвета, настроение... (необязательно)"></textarea>
+                            </div>
+                            <button class="generate-prompt-btn" id="generate-prompt-btn">
+                                ✨ Сгенерировать промпт
+                            </button>
+                        </div>
+                        <div class="generated-prompt-box" id="generated-prompt-box" style="display: none;">
+                            <div class="generated-prompt-header">
+                                <span>📋 Сгенерированный промпт:</span>
+                                <div class="prompt-actions">
+                                    <button class="action-btn accept" onclick="acceptGeneratedPrompt()">✅ Использовать</button>
+                                    <button class="action-btn regenerate" onclick="regeneratePrompt()">🔄 Перегенерировать</button>
+                                    <button class="action-btn edit" onclick="editGeneratedPrompt()">✏️ Редактировать</button>
+                                </div>
+                            </div>
+                            <div class="generated-prompt-text" id="generated-prompt-text"></div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Prompt Input -->
                 <div class="prompt-section">
                     <div class="prompt-header">
@@ -749,6 +998,7 @@
     <script>
         let selectedPlatform = 'youtube_banner';
         let selectedStyle = 'modern';
+        let selectedFormat = 'realistic';
         
         // Platform selection
         document.querySelectorAll('.platform-btn').forEach(btn => {
@@ -769,6 +1019,15 @@
                 document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 selectedStyle = btn.dataset.style;
+            });
+        });
+        
+        // Format selection
+        document.querySelectorAll('.format-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedFormat = btn.dataset.format;
             });
         });
         
@@ -804,6 +1063,82 @@
             return urls;
         }
         
+        // Prompt Generator Functions
+        function togglePromptGenerator() {
+            const content = document.getElementById('prompt-generator-content');
+            const icon = document.getElementById('prompt-toggle-icon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.classList.add('open');
+            } else {
+                content.style.display = 'none';
+                icon.classList.remove('open');
+            }
+        }
+        
+        async function generatePrompt() {
+            const topic = document.getElementById('generator-topic').value.trim();
+            if (!topic) {
+                alert('Пожалуйста, укажите тему обложки');
+                return;
+            }
+            
+            const description = document.getElementById('generator-description').value.trim();
+            const btn = document.getElementById('generate-prompt-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Генерирую...';
+            
+            try {
+                const response = await fetch('/covers/api/generate-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: topic,
+                        description: description,
+                        platform: selectedPlatform,
+                        style: selectedStyle,
+                        format: selectedFormat
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Show generated prompt
+                document.getElementById('generated-prompt-text').textContent = data.prompt;
+                document.getElementById('generated-prompt-box').style.display = 'block';
+                
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✨ Сгенерировать промпт';
+            }
+        }
+        
+        function acceptGeneratedPrompt() {
+            const promptText = document.getElementById('generated-prompt-text').textContent;
+            document.getElementById('prompt').value = promptText;
+            document.getElementById('generated-prompt-box').style.display = 'none';
+            togglePromptGenerator();
+        }
+        
+        function regeneratePrompt() {
+            generatePrompt();
+        }
+        
+        function editGeneratedPrompt() {
+            const promptText = document.getElementById('generated-prompt-text').textContent;
+            document.getElementById('prompt').value = promptText;
+            document.getElementById('generated-prompt-box').style.display = 'none';
+        }
+        
+        // Attach generate prompt button
+        document.getElementById('generate-prompt-btn').addEventListener('click', generatePrompt);
+        
         // Generate button
         document.getElementById('generate-btn').addEventListener('click', async () => {
             const prompt = document.getElementById('prompt').value.trim();
@@ -824,13 +1159,14 @@
             document.getElementById('generate-btn').disabled = true;
             
             try {
-                // Create task with image URLs
+                // Create task with image URLs and format
                 const response = await fetch('/covers/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         platform: selectedPlatform,
                         style: selectedStyle,
+                        format: selectedFormat,
                         prompt: prompt,
                         image_urls: imageUrls
                     })
