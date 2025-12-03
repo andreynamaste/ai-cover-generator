@@ -1337,6 +1337,17 @@ def generate_comics():
         description = data.get('description', '').strip()
         image_urls = data.get('image_urls', [])
         
+        # Обрабатываем image_urls
+        processed_urls = []
+        for url in image_urls:
+            url = url.strip()
+            if not url:
+                continue
+            if url.startswith('/covers/uploads/'):
+                url = f"https://2msp.webversy.top{url}"
+            processed_urls.append(url)
+        processed_urls = processed_urls[:6]
+        
         if not topic:
             return jsonify({'error': 'Введите тему комикса'}), 400
         
@@ -1398,8 +1409,8 @@ def generate_comics():
             final_prompt = f"{prompt}, {style_prefix}comic panel {i+1} of {blocks_count}"
             
             # Добавляем ссылки на фото если есть
-            if image_urls:
-                photo_refs = ", ".join([f"reference image {j+1}: {url}" for j, url in enumerate(image_urls[:6]) if url.strip()])
+            if processed_urls:
+                photo_refs = ", ".join([f"reference image {j+1}: {url}" for j, url in enumerate(processed_urls)])
                 if photo_refs:
                     final_prompt += f", {photo_refs}"
             
@@ -1411,45 +1422,56 @@ def generate_comics():
             # Исправляем промпт
             fixed_prompt = fix_prompt_errors(prompt, openai_token)
             
-            # Создаём задачу генерации
+            # Создаём задачу генерации (используем тот же формат что и для обложек)
             payload = {
-                "prompt": fixed_prompt,
-                "width": 1024,
-                "height": 1024,
-                "num_inference_steps": 30,
-                "guidance_scale": 7.5
+                "model": "nano-banana-pro",
+                "input": {
+                    "prompt": fixed_prompt,
+                    "aspect_ratio": "1:1",
+                    "resolution": "2K",
+                    "output_format": "png"
+                }
             }
             
             # Добавляем reference images если есть
-            if image_urls:
-                ref_images = [url for url in image_urls[:6] if url.strip()]
-                if ref_images:
-                    payload["reference_images"] = ref_images
+            if processed_urls:
+                payload["input"]["image_prompts"] = [
+                    {"url": url, "weight": 0.7} for url in processed_urls
+                ]
+                print(f"✅ Added {len(processed_urls)} reference images to comics generation block {i+1}")
             
             headers = {
                 "Authorization": f"Bearer {api_token}",
                 "Content-Type": "application/json"
             }
             
-            response = requests.post(
-                Config.KIE_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                task_data = response.json()
-                task_id = task_data.get('task_id')
-                if task_id:
+            try:
+                response = requests.post(
+                    f"{Config.KIE_API_URL}/createTask",
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+                
+                result = response.json()
+                
+                if result.get('code') == 200 and result.get('data', {}).get('taskId'):
+                    task_id = result['data']['taskId']
                     task_ids.append({
                         'block': i + 1,
                         'task_id': task_id,
                         'prompt': fixed_prompt
                     })
+                else:
+                    print(f"Error creating task for block {i+1}: {result}")
+            except Exception as e:
+                print(f"Exception creating task for block {i+1}: {e}")
         
         if not task_ids:
-            return jsonify({'error': 'Не удалось создать задачи генерации'}), 500
+            return jsonify({
+                'error': 'Не удалось создать задачи генерации. Проверьте API токен и баланс кредитов на Kie.ai.',
+                'details': 'Возможно, проблема с API токеном или недостаточно кредитов'
+            }), 500
         
         # Сохраняем в БД
         conn = get_db()
@@ -1466,11 +1488,15 @@ def generate_comics():
             'success': True,
             'blocks': blocks_count,
             'task_ids': task_ids,
-            'message': f'Генерация комикса из {blocks_count} блоков начата!'
+            'images_used': len(processed_urls) if processed_urls else 0,
+            'message': f'Генерация комикса из {blocks_count} блоков начата! {"✅ Используется " + str(len(processed_urls)) + " фото" if processed_urls else ""}'
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Exception in generate_comics: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Ошибка при генерации комикса: {str(e)}'}), 500
 
 
 @app.route('/api/generate-caricature', methods=['POST'])
@@ -1511,38 +1537,53 @@ def generate_caricature():
         # Исправляем промпт
         fixed_prompt = fix_prompt_errors(caricature_prompt, openai_token)
         
-        # Создаём задачу генерации
+        # Обрабатываем image_urls
+        processed_urls = []
+        for url in image_urls:
+            url = url.strip()
+            if not url:
+                continue
+            if url.startswith('/covers/uploads/'):
+                url = f"https://2msp.webversy.top{url}"
+            processed_urls.append(url)
+        processed_urls = processed_urls[:6]
+        
+        # Создаём задачу генерации (используем тот же формат что и для обложек)
         payload = {
-            "prompt": fixed_prompt,
-            "width": 1024,
-            "height": 1024,
-            "num_inference_steps": 30,
-            "guidance_scale": 7.5
+            "model": "nano-banana-pro",
+            "input": {
+                "prompt": fixed_prompt,
+                "aspect_ratio": "1:1",
+                "resolution": "2K",
+                "output_format": "png"
+            }
         }
         
         # Добавляем reference images если есть
-        if image_urls:
-            ref_images = [url for url in image_urls[:6] if url.strip()]
-            if ref_images:
-                payload["reference_images"] = ref_images
+        if processed_urls:
+            payload["input"]["image_prompts"] = [
+                {"url": url, "weight": 0.7} for url in processed_urls
+            ]
+            print(f"✅ Added {len(processed_urls)} reference images to caricature generation")
         
         headers = {
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json"
         }
         
-        response = requests.post(
-            Config.KIE_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            task_data = response.json()
-            task_id = task_data.get('task_id')
+        try:
+            response = requests.post(
+                f"{Config.KIE_API_URL}/createTask",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
             
-            if task_id:
+            result = response.json()
+            
+            if result.get('code') == 200 and result.get('data', {}).get('taskId'):
+                task_id = result['data']['taskId']
+                
                 # Сохраняем в БД
                 conn = get_db()
                 c = conn.cursor()
@@ -1555,12 +1596,22 @@ def generate_caricature():
                 
                 return jsonify({
                     'success': True,
-                    'task_id': task_id,
+                    'taskId': task_id,
                     'prompt': fixed_prompt,
-                    'message': 'Генерация карикатуры начата!'
+                    'images_used': len(processed_urls) if processed_urls else 0,
+                    'message': f'Генерация карикатуры начата! {"✅ Используется " + str(len(processed_urls)) + " фото" if processed_urls else ""}'
                 })
-        
-        return jsonify({'error': 'Не удалось создать задачу генерации'}), 500
+            else:
+                error_msg = result.get('msg', 'API Error')
+                if result.get('code') == 401:
+                    error_msg = 'Неверный API токен. Проверьте настройки.'
+                elif result.get('code') == 402:
+                    error_msg = 'Недостаточно кредитов на аккаунте Kie.ai'
+                return jsonify({'error': error_msg, 'code': result.get('code')}), 400
+                
+        except Exception as e:
+            print(f"Exception creating caricature task: {e}")
+            return jsonify({'error': f'Ошибка при создании задачи: {str(e)}'}), 500
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
