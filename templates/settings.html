@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚙️ Настройки - AI Cover Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --accent: #06b6d4;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--dark);
+            min-height: 100vh;
+            color: var(--white);
+        }
+        
+        .header {
+            background: var(--dark-light);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 15px 20px;
+        }
+        
+        .header-content {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            color: var(--white);
+        }
+        
+        .logo span {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav-links a {
+            color: var(--gray);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover, .nav-links a.active { color: var(--white); }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .card {
+            background: var(--dark-light);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 25px;
+        }
+        
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group { margin-bottom: 20px; }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--white);
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .form-group small {
+            display: block;
+            margin-top: 8px;
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+        
+        .form-group small a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .btn {
+            padding: 14px 30px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid #f59e0b;
+            color: #f59e0b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .info-box {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+        
+        .info-box h4 {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        
+        .info-box ol {
+            color: var(--gray);
+            margin-left: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .info-box li { margin-bottom: 8px; }
+        
+        .info-box a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .info-box a:hover { text-decoration: underline; }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .user-details h3 { font-size: 1.1rem; margin-bottom: 5px; }
+        .user-details p { color: var(--gray); font-size: 0.9rem; }
+        
+        .token-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .token-status.active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        
+        .token-status.inactive {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="/covers/" class="logo">
+                🎨 <span>AI Cover</span> Generator
+            </a>
+            <nav class="nav-links">
+                <a href="/covers/">Генератор</a>
+                <a href="/covers/history">История</a>
+                <a href="/covers/settings" class="active">Настройки</a>
+                <a href="/covers/logout">Выйти</a>
+            </nav>
+        </div>
+    </header>
+    
+    <div class="container">
+        <h1>⚙️ Настройки</h1>
+        
+        {% if success %}
+        <div class="success">✅ {{ success }}</div>
+        {% endif %}
+        
+        <div class="card">
+            <h2>👤 Профиль</h2>
+            <div class="user-info">
+                <div class="user-avatar">{{ user.username[0].upper() if user.username else '?' }}</div>
+                <div class="user-details">
+                    <h3>{{ user.username }}</h3>
+                    <p>{{ user.email }}</p>
+                    <p style="margin-top: 5px;">
+                        Генераций: <strong>{{ user.generations_count }}</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>🔑 API Токен Kie.ai</h2>
+            
+            {% if user.api_token %}
+            <span class="token-status active">✅ Токен настроен</span>
+            {% else %}
+            <span class="token-status inactive">⚠️ Токен не настроен</span>
+            <div class="warning" style="margin-top: 15px;">
+                Для генерации обложек необходимо добавить API токен от Kie.ai
+            </div>
+            {% endif %}
+            
+            <form method="POST" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label>API Токен</label>
+                    <input type="text" name="api_token" 
+                           value="{{ user.api_token if user.api_token else '' }}"
+                           placeholder="Вставьте ваш API ключ от Kie.ai">
+                    <small>
+                        Токен используется для генерации изображений через Nano Banana Pro.
+                        <a href="https://kie.ai/api-key" target="_blank">Получить токен →</a>
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn">💾 Сохранить токен</button>
+            </form>
+            
+            <div class="info-box">
+                <h4>📋 Как получить API токен:</h4>
+                <ol>
+                    <li>Перейдите на <a href="https://kie.ai" target="_blank">kie.ai</a></li>
+                    <li>Зарегистрируйтесь или войдите в аккаунт</li>
+                    <li>Откройте <a href="https://kie.ai/api-key" target="_blank">страницу API ключей</a></li>
+                    <li>Создайте новый ключ или скопируйте существующий</li>
+                    <li>Вставьте его в поле выше и сохраните</li>
+                </ol>
+                <p style="margin-top: 15px; color: var(--gray);">
+                    💡 <strong>Совет:</strong> Новые пользователи Kie.ai получают бесплатные кредиты для тестирования!
+                </p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>📊 Использование API</h2>
+            <p style="color: var(--gray); margin-bottom: 15px;">
+                Баланс и использование кредитов можно проверить в личном кабинете Kie.ai
+            </p>
+            <a href="https://kie.ai/dashboard" target="_blank" class="btn" style="display: inline-block; text-decoration: none;">
+                📈 Открыть Dashboard Kie.ai
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+

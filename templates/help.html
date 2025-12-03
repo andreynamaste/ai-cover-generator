@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📖 Инструкция - AI Cover Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --accent: #06b6d4;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--dark);
+            min-height: 100vh;
+            color: var(--white);
+            line-height: 1.7;
+        }
+        
+        .header {
+            background: var(--dark-light);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            color: var(--white);
+        }
+        
+        .logo span {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links a {
+            color: var(--gray);
+            text-decoration: none;
+            margin-left: 20px;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover { color: var(--white); }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .subtitle {
+            color: var(--gray);
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+        
+        .step {
+            background: var(--dark-light);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .step h2 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .step-number {
+            background: var(--gradient);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        
+        .step p, .step li {
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+        
+        .step ul, .step ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .step a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .step a:hover { text-decoration: underline; }
+        
+        .highlight {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin: 15px 0;
+        }
+        
+        .highlight.success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+        }
+        
+        .highlight.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: #f59e0b;
+        }
+        
+        code {
+            background: rgba(0,0,0,0.3);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .code-block {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin: 15px 0;
+            font-family: monospace;
+            overflow-x: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .platforms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .platform-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 12px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .platform-item .icon { font-size: 1.3rem; }
+        .platform-item .name { font-size: 0.9rem; }
+        .platform-item .size { color: var(--gray); font-size: 0.75rem; }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 14px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--gradient);
+            color: var(--white);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: var(--white);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .examples {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .example-item {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .example-item h4 {
+            color: var(--accent);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        
+        .example-item p {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="/covers/" class="logo">
+                🎨 <span>AI Cover</span> Generator
+            </a>
+            <nav class="nav-links">
+                <a href="/covers/">Генератор</a>
+                <a href="/covers/register">Регистрация</a>
+                <a href="/covers/login">Вход</a>
+            </nav>
+        </div>
+    </header>
+    
+    <div class="container">
+        <h1>📖 Как пользоваться</h1>
+        <p class="subtitle">Создавайте профессиональные обложки для соцсетей за минуту!</p>
+        
+        <!-- Step 1 -->
+        <div class="step">
+            <h2><span class="step-number">1</span> Регистрация</h2>
+            
+            <p><strong>Вариант А: Через Email</strong></p>
+            <ol>
+                <li>Откройте <a href="/covers/register">страницу регистрации</a></li>
+                <li>Введите <strong>имя пользователя</strong> (латиницей)</li>
+                <li>Введите <strong>email</strong></li>
+                <li>Придумайте <strong>пароль</strong> (минимум 6 символов)</li>
+                <li>Нажмите <strong>"Создать аккаунт"</strong></li>
+            </ol>
+            
+            <p><strong>Вариант Б: Через Google</strong></p>
+            <ol>
+                <li>Нажмите <strong>"Зарегистрироваться через Google"</strong></li>
+                <li>Выберите ваш Google аккаунт</li>
+                <li>Готово!</li>
+            </ol>
+            
+            <div class="cta-buttons">
+                <a href="/covers/register" class="btn btn-primary">✨ Зарегистрироваться</a>
+            </div>
+        </div>
+        
+        <!-- Step 2 -->
+        <div class="step">
+            <h2><span class="step-number">2</span> Получите API токен Kie.ai</h2>
+            
+            <p>Для генерации изображений нужен <strong>бесплатный</strong> токен от Kie.ai:</p>
+            
+            <ol>
+                <li>Зайдите на <a href="https://kie.ai" target="_blank">kie.ai</a></li>
+                <li>Зарегистрируйтесь или войдите</li>
+                <li>Перейдите в <a href="https://kie.ai/api-key" target="_blank">раздел API ключей</a></li>
+                <li>Скопируйте ваш API ключ</li>
+                <li>Вставьте его в <a href="/covers/settings">настройках</a></li>
+            </ol>
+            
+            <div class="highlight success">
+                💡 <strong>Бонус:</strong> Новые пользователи Kie.ai получают бесплатные кредиты для тестирования!
+            </div>
+        </div>
+        
+        <!-- Step 3 -->
+        <div class="step">
+            <h2><span class="step-number">3</span> Создайте обложку</h2>
+            
+            <p><strong>Выберите платформу:</strong></p>
+            
+            <div class="platforms-grid">
+                <div class="platform-item">
+                    <span class="icon">📺</span>
+                    <div>
+                        <div class="name">YouTube Баннер</div>
+                        <div class="size">2560×1440</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">🎬</span>
+                    <div>
+                        <div class="name">YouTube Превью</div>
+                        <div class="size">1280×720</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">📘</span>
+                    <div>
+                        <div class="name">Facebook Обложка</div>
+                        <div class="size">820×312</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">📷</span>
+                    <div>
+                        <div class="name">Instagram Пост</div>
+                        <div class="size">1080×1080</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">📱</span>
+                    <div>
+                        <div class="name">Instagram Stories</div>
+                        <div class="size">1080×1920</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">🐦</span>
+                    <div>
+                        <div class="name">Twitter Шапка</div>
+                        <div class="size">1500×500</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">🎵</span>
+                    <div>
+                        <div class="name">TikTok</div>
+                        <div class="size">1080×1920</div>
+                    </div>
+                </div>
+                <div class="platform-item">
+                    <span class="icon">🔵</span>
+                    <div>
+                        <div class="name">ВКонтакте</div>
+                        <div class="size">1590×400</div>
+                    </div>
+                </div>
+            </div>
+            
+            <p><strong>Выберите стиль:</strong> Современный, Неон, Градиент, 3D, Винтаж, Природа, Технологии, Игровой, Бизнес, Креативный</p>
+            
+            <p><strong>Опишите обложку:</strong></p>
+            
+            <div class="examples">
+                <div class="example-item">
+                    <h4>🎮 Игровой канал</h4>
+                    <p>Epic gaming banner with controller, explosive effects, purple orange gradient</p>
+                </div>
+                <div class="example-item">
+                    <h4>💻 Технологии</h4>
+                    <p>Tech review channel banner with futuristic gadgets, blue neon glow</p>
+                </div>
+                <div class="example-item">
+                    <h4>🏋️ Фитнес</h4>
+                    <p>Fitness motivation post with athletic silhouette, sunrise gradient</p>
+                </div>
+                <div class="example-item">
+                    <h4>🍕 Еда</h4>
+                    <p>Restaurant cover with delicious food, warm lighting, appetizing colors</p>
+                </div>
+            </div>
+            
+            <p>Нажмите <strong>"Сгенерировать"</strong> и подождите 30-60 секунд!</p>
+            
+            <div class="cta-buttons">
+                <a href="/covers/" class="btn btn-primary">🎨 Создать обложку</a>
+            </div>
+        </div>
+        
+        <!-- FAQ -->
+        <div class="step">
+            <h2>❓ Частые вопросы</h2>
+            
+            <p><strong>Сколько это стоит?</strong></p>
+            <p>Регистрация бесплатна. Генерация зависит от баланса вашего Kie.ai аккаунта. Новые пользователи получают бесплатные кредиты!</p>
+            
+            <p><strong>Почему нужен токен Kie.ai?</strong></p>
+            <p>Изображения генерирует нейросеть Nano Banana Pro через API. Каждый пользователь использует свой токен = свой баланс.</p>
+            
+            <p><strong>Где посмотреть историю?</strong></p>
+            <p>Все ваши обложки сохраняются в <a href="/covers/history">истории генераций</a>.</p>
+        </div>
+        
+        <div class="cta-buttons" style="justify-content: center; margin-top: 40px;">
+            <a href="/covers/register" class="btn btn-primary">🚀 Начать бесплатно</a>
+            <a href="/covers/" class="btn btn-secondary">🎨 Открыть генератор</a>
+        </div>
+    </div>
+</body>
+</html>
+

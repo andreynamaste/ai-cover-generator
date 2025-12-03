@@ -1,0 +1,605 @@
+#!/usr/bin/env python3
+"""
+🎨 AI Cover Generator - Генератор обложек для социальных сетей
+С системой регистрации, личными API токенами и Google OAuth
+"""
+
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_cors import CORS
+from authlib.integrations.flask_client import OAuth
+import requests
+import time
+import os
+import uuid
+import hashlib
+import sqlite3
+from datetime import datetime
+from functools import wraps
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your-super-secret-key-change-me-in-production-12345')
+CORS(app)
+
+# ============ GOOGLE OAUTH CONFIG ============
+# Для настройки Google OAuth:
+# 1. Зайдите на https://console.cloud.google.com/
+# 2. Создайте проект
+# 3. APIs & Services -> Credentials -> Create Credentials -> OAuth Client ID
+# 4. Добавьте Authorized redirect URI: https://2msp.webversy.top/covers/auth/google/callback
+# 5. Скопируйте Client ID и Client Secret
+
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+
+oauth = OAuth(app)
+
+if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    google = oauth.register(
+        name='google',
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
+else:
+    google = None
+
+# Конфигурация
+class Config:
+    KIE_API_URL = "https://api.kie.ai/api/v1/jobs"
+    OUTPUT_FOLDER = "/tmp/cover-generator"
+    DATABASE = "/var/www/cover-generator/users.db"
+
+os.makedirs(Config.OUTPUT_FOLDER, exist_ok=True)
+
+# Инициализация базы данных
+def init_db():
+    conn = sqlite3.connect(Config.DATABASE, timeout=30)
+    conn.execute('PRAGMA journal_mode=WAL')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            google_id TEXT,
+            api_token TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            generations_count INTEGER DEFAULT 0
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS generations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            task_id TEXT,
+            platform TEXT,
+            style TEXT,
+            prompt TEXT,
+            status TEXT,
+            image_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    # Добавляем колонку google_id если её нет
+    try:
+        c.execute('ALTER TABLE users ADD COLUMN google_id TEXT')
+    except:
+        pass
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def get_db():
+    conn = sqlite3.connect(Config.DATABASE, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    return conn
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect('/covers/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Размеры для разных соц сетей
+SOCIAL_MEDIA_SIZES = {
+    "youtube_banner": {
+        "name": "YouTube Баннер канала",
+        "width": 2560, "height": 1440,
+        "aspect_ratio": "16:9", "resolution": "4K",
+        "description": "Шапка канала YouTube", "icon": "📺"
+    },
+    "youtube_thumbnail": {
+        "name": "YouTube Превью",
+        "width": 1280, "height": 720,
+        "aspect_ratio": "16:9", "resolution": "2K",
+        "description": "Превью для видео", "icon": "🎬"
+    },
+    "facebook_cover": {
+        "name": "Facebook Обложка",
+        "width": 820, "height": 312,
+        "aspect_ratio": "21:9", "resolution": "1K",
+        "description": "Обложка страницы Facebook", "icon": "📘"
+    },
+    "facebook_post": {
+        "name": "Facebook Пост",
+        "width": 1200, "height": 630,
+        "aspect_ratio": "16:9", "resolution": "2K",
+        "description": "Изображение для поста", "icon": "📰"
+    },
+    "instagram_post": {
+        "name": "Instagram Пост",
+        "width": 1080, "height": 1080,
+        "aspect_ratio": "1:1", "resolution": "2K",
+        "description": "Квадратный пост Instagram", "icon": "📷"
+    },
+    "instagram_story": {
+        "name": "Instagram Stories",
+        "width": 1080, "height": 1920,
+        "aspect_ratio": "9:16", "resolution": "2K",
+        "description": "Сторис Instagram/Reels", "icon": "📱"
+    },
+    "instagram_portrait": {
+        "name": "Instagram Портрет",
+        "width": 1080, "height": 1350,
+        "aspect_ratio": "4:5", "resolution": "2K",
+        "description": "Вертикальный пост", "icon": "🖼️"
+    },
+    "twitter_header": {
+        "name": "Twitter/X Шапка",
+        "width": 1500, "height": 500,
+        "aspect_ratio": "3:2", "resolution": "2K",
+        "description": "Обложка профиля Twitter", "icon": "🐦"
+    },
+    "linkedin_cover": {
+        "name": "LinkedIn Обложка",
+        "width": 1584, "height": 396,
+        "aspect_ratio": "4:1", "resolution": "2K",
+        "description": "Обложка профиля LinkedIn", "icon": "💼"
+    },
+    "tiktok_cover": {
+        "name": "TikTok Обложка",
+        "width": 1080, "height": 1920,
+        "aspect_ratio": "9:16", "resolution": "2K",
+        "description": "Обложка для TikTok", "icon": "🎵"
+    },
+    "vk_cover": {
+        "name": "ВКонтакте Обложка",
+        "width": 1590, "height": 400,
+        "aspect_ratio": "4:1", "resolution": "2K",
+        "description": "Обложка сообщества ВК", "icon": "🔵"
+    },
+    "telegram_channel": {
+        "name": "Telegram Канал",
+        "width": 1280, "height": 720,
+        "aspect_ratio": "16:9", "resolution": "2K",
+        "description": "Превью для Telegram", "icon": "✈️"
+    }
+}
+
+# Стили дизайна
+DESIGN_STYLES = {
+    "modern": {"name": "Современный", "prompt_prefix": "Modern minimalist design with clean lines, bold typography, gradient backgrounds,", "icon": "✨"},
+    "neon": {"name": "Неон", "prompt_prefix": "Neon cyberpunk style with glowing effects, dark background, vibrant neon colors pink blue purple,", "icon": "💜"},
+    "gradient": {"name": "Градиент", "prompt_prefix": "Beautiful gradient background with smooth color transitions, professional look,", "icon": "🌈"},
+    "3d": {"name": "3D Графика", "prompt_prefix": "3D rendered elements, glossy materials, depth and shadows, professional 3D design,", "icon": "🎮"},
+    "vintage": {"name": "Винтаж", "prompt_prefix": "Vintage retro style, warm colors, nostalgic feel, classic typography,", "icon": "📻"},
+    "nature": {"name": "Природа", "prompt_prefix": "Natural elements, green plants, organic shapes, eco-friendly aesthetic,", "icon": "🌿"},
+    "tech": {"name": "Технологии", "prompt_prefix": "High-tech futuristic design, circuit patterns, blue tech glow, digital elements,", "icon": "🤖"},
+    "gaming": {"name": "Игровой", "prompt_prefix": "Epic gaming style, dynamic action, bold colors, esports aesthetic,", "icon": "🎮"},
+    "business": {"name": "Бизнес", "prompt_prefix": "Professional corporate design, clean layout, trustworthy colors blue gray,", "icon": "💼"},
+    "creative": {"name": "Креативный", "prompt_prefix": "Creative artistic design, unique visual elements, eye-catching composition,", "icon": "🎨"}
+}
+
+PROMPT_EXAMPLES = [
+    {"category": "YouTube", "title": "Техно канал", "prompt": "Tech review channel banner with futuristic gadgets, blue neon glow, modern typography, dark background"},
+    {"category": "YouTube", "title": "Игровой канал", "prompt": "Epic gaming channel banner with controller, explosive effects, bold GAMING text, purple orange gradient"},
+    {"category": "Instagram", "title": "Фитнес блог", "prompt": "Fitness motivation post with athletic silhouette, sunrise gradient, inspirational quote space, energetic vibe"},
+    {"category": "Facebook", "title": "Ресторан", "prompt": "Restaurant cover with delicious food photography style, warm lighting, elegant typography, appetizing colors"},
+    {"category": "Business", "title": "Стартап", "prompt": "Startup company cover with rocket launch, growth chart elements, innovative blue gradient, professional look"}
+]
+
+
+# ============ GOOGLE OAUTH ROUTES ============
+
+@app.route('/covers/auth/google')
+def google_login():
+    if not google:
+        return redirect('/covers/login?error=google_not_configured')
+    redirect_uri = 'https://2msp.webversy.top/covers/auth/google/callback'
+    return google.authorize_redirect(redirect_uri)
+
+
+@app.route('/covers/auth/google/callback')
+def google_callback():
+    if not google:
+        return redirect('/covers/login?error=google_not_configured')
+    
+    try:
+        token = google.authorize_access_token()
+        user_info = token.get('userinfo')
+        
+        if not user_info:
+            return redirect('/covers/login?error=google_failed')
+        
+        google_id = user_info.get('sub')
+        email = user_info.get('email')
+        name = user_info.get('name', email.split('@')[0])
+        
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Проверяем существует ли пользователь с таким google_id
+        c.execute('SELECT * FROM users WHERE google_id = ?', (google_id,))
+        user = c.fetchone()
+        
+        if user:
+            # Логиним существующего пользователя
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            conn.close()
+            return redirect('/covers/')
+        
+        # Проверяем email
+        c.execute('SELECT * FROM users WHERE email = ?', (email,))
+        user = c.fetchone()
+        
+        if user:
+            # Привязываем Google к существующему аккаунту
+            c.execute('UPDATE users SET google_id = ? WHERE id = ?', (google_id, user['id']))
+            conn.commit()
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            conn.close()
+            return redirect('/covers/')
+        
+        # Создаём нового пользователя
+        username = name.replace(' ', '_').lower()
+        # Проверяем уникальность username
+        c.execute('SELECT id FROM users WHERE username = ?', (username,))
+        if c.fetchone():
+            username = f"{username}_{str(uuid.uuid4())[:4]}"
+        
+        c.execute(
+            'INSERT INTO users (username, email, google_id) VALUES (?, ?, ?)',
+            (username, email, google_id)
+        )
+        conn.commit()
+        user_id = c.lastrowid
+        conn.close()
+        
+        session['user_id'] = user_id
+        session['username'] = username
+        
+        # Перенаправляем на настройки для добавления API токена
+        return redirect('/covers/settings?welcome=1')
+        
+    except Exception as e:
+        print(f"Google OAuth error: {e}")
+        return redirect('/covers/login?error=google_failed')
+
+
+# ============ AUTH ROUTES ============
+
+@app.route('/covers/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.form
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        api_token = data.get('api_token', '').strip()
+        
+        if not username or not email or not password:
+            return render_template('register.html', error='Заполните все обязательные поля', google_enabled=bool(google))
+        
+        if len(password) < 6:
+            return render_template('register.html', error='Пароль должен быть минимум 6 символов', google_enabled=bool(google))
+        
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute(
+                'INSERT INTO users (username, email, password_hash, api_token) VALUES (?, ?, ?, ?)',
+                (username, email, hash_password(password), api_token if api_token else None)
+            )
+            conn.commit()
+            user_id = c.lastrowid
+            conn.close()
+            
+            session['user_id'] = user_id
+            session['username'] = username
+            
+            if api_token:
+                return redirect('/covers/')
+            else:
+                return redirect('/covers/settings')
+                
+        except sqlite3.IntegrityError:
+            return render_template('register.html', error='Пользователь с таким именем или email уже существует', google_enabled=bool(google))
+    
+    return render_template('register.html', google_enabled=bool(google))
+
+
+@app.route('/covers/login', methods=['GET', 'POST'])
+def login():
+    error = request.args.get('error')
+    error_msg = None
+    
+    if error == 'google_not_configured':
+        error_msg = 'Google авторизация не настроена'
+    elif error == 'google_failed':
+        error_msg = 'Ошибка авторизации через Google'
+    
+    if request.method == 'POST':
+        data = request.form
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM users WHERE email = ? AND password_hash = ?', 
+                  (email, hash_password(password)))
+        user = c.fetchone()
+        conn.close()
+        
+        if user:
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            return redirect('/covers/')
+        else:
+            return render_template('login.html', error='Неверный email или пароль', google_enabled=bool(google))
+    
+    return render_template('login.html', error=error_msg, google_enabled=bool(google))
+
+
+@app.route('/covers/logout')
+def logout():
+    session.clear()
+    return redirect('/covers/login')
+
+
+@app.route('/covers/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],))
+    user = c.fetchone()
+    
+    welcome = request.args.get('welcome')
+    success_msg = None
+    
+    if welcome:
+        success_msg = 'Добро пожаловать! Добавьте API токен для генерации обложек.'
+    
+    if request.method == 'POST':
+        api_token = request.form.get('api_token', '').strip()
+        c.execute('UPDATE users SET api_token = ? WHERE id = ?', (api_token, session['user_id']))
+        conn.commit()
+        conn.close()
+        return render_template('settings.html', user=user, success='API токен сохранён!', google_enabled=bool(google))
+    
+    conn.close()
+    return render_template('settings.html', user=user, success=success_msg, google_enabled=bool(google))
+
+
+# ============ HELP PAGE ============
+
+@app.route('/covers/help')
+def help_page():
+    return render_template('help.html')
+
+
+# ============ MAIN ROUTES ============
+
+@app.route('/')
+@app.route('/covers')
+@app.route('/covers/')
+def index():
+    if 'user_id' not in session:
+        return redirect('/covers/login')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT api_token FROM users WHERE id = ?', (session['user_id'],))
+    user = c.fetchone()
+    conn.close()
+    
+    has_token = bool(user and user['api_token'])
+    
+    return render_template('index.html', 
+                         sizes=SOCIAL_MEDIA_SIZES,
+                         styles=DESIGN_STYLES,
+                         examples=PROMPT_EXAMPLES,
+                         username=session.get('username'),
+                         has_token=has_token)
+
+
+@app.route('/api/generate', methods=['POST'])
+@app.route('/covers/api/generate', methods=['POST'])
+@login_required
+def generate_cover():
+    try:
+        # Получаем токен пользователя
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT api_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user or not user['api_token']:
+            return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
+        
+        api_token = user['api_token']
+        
+        data = request.json
+        platform = data.get('platform', 'youtube_thumbnail')
+        style = data.get('style', 'modern')
+        user_prompt = data.get('prompt', '')
+        
+        if not user_prompt:
+            return jsonify({'error': 'Опишите желаемую обложку'}), 400
+        
+        size_config = SOCIAL_MEDIA_SIZES.get(platform, SOCIAL_MEDIA_SIZES['youtube_thumbnail'])
+        style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
+        
+        full_prompt = f"{style_config['prompt_prefix']} {user_prompt}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
+        
+        headers = {
+            'Authorization': f'Bearer {api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            "model": "nano-banana-pro",
+            "input": {
+                "prompt": full_prompt,
+                "aspect_ratio": size_config['aspect_ratio'],
+                "resolution": size_config['resolution'],
+                "output_format": "png"
+            }
+        }
+        
+        response = requests.post(
+            f"{Config.KIE_API_URL}/createTask",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        
+        result = response.json()
+        
+        if result.get('code') == 200:
+            # Сохраняем генерацию в БД
+            conn = get_db()
+            c = conn.cursor()
+            c.execute('''
+                INSERT INTO generations (user_id, task_id, platform, style, prompt, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (session['user_id'], result['data']['taskId'], platform, style, user_prompt, 'processing'))
+            c.execute('UPDATE users SET generations_count = generations_count + 1 WHERE id = ?', (session['user_id'],))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'taskId': result['data']['taskId'],
+                'platform': platform,
+                'size': f"{size_config['width']}x{size_config['height']}",
+                'message': 'Задача создана! Генерация началась...'
+            })
+        else:
+            error_msg = result.get('msg', 'API Error')
+            if result.get('code') == 401:
+                error_msg = 'Неверный API токен. Проверьте настройки.'
+            elif result.get('code') == 402:
+                error_msg = 'Недостаточно кредитов на аккаунте Kie.ai'
+            return jsonify({'error': error_msg, 'code': result.get('code')}), 400
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/status/<task_id>')
+@app.route('/covers/api/status/<task_id>')
+@login_required
+def check_status(task_id):
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT api_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        
+        if not user or not user['api_token']:
+            conn.close()
+            return jsonify({'error': 'API токен не настроен'}), 400
+        
+        headers = {'Authorization': f'Bearer {user["api_token"]}'}
+        
+        response = requests.get(
+            f"{Config.KIE_API_URL}/recordInfo",
+            params={'taskId': task_id},
+            headers=headers,
+            timeout=30
+        )
+        
+        result = response.json()
+        
+        if result.get('code') == 200:
+            data = result['data']
+            state = data.get('state', 'waiting')
+            
+            response_data = {'state': state, 'taskId': task_id}
+            
+            if state == 'success':
+                import json
+                result_json = json.loads(data.get('resultJson', '{}'))
+                urls = result_json.get('resultUrls', [])
+                if urls:
+                    response_data['imageUrl'] = urls[0]
+                    response_data['message'] = 'Обложка готова!'
+                    
+                    # Обновляем статус в БД
+                    c.execute('UPDATE generations SET status = ?, image_url = ? WHERE task_id = ?',
+                              ('success', urls[0], task_id))
+                    conn.commit()
+            elif state == 'fail':
+                response_data['error'] = data.get('failMsg', 'Generation failed')
+                c.execute('UPDATE generations SET status = ? WHERE task_id = ?', ('failed', task_id))
+                conn.commit()
+            else:
+                response_data['message'] = 'Генерация в процессе...'
+            
+            conn.close()
+            return jsonify(response_data)
+        else:
+            conn.close()
+            return jsonify({'error': 'Failed to check status'}), 400
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/covers/history')
+@login_required
+def history():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''
+        SELECT * FROM generations 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 50
+    ''', (session['user_id'],))
+    generations = c.fetchall()
+    conn.close()
+    return render_template('history.html', generations=generations, username=session.get('username'))
+
+
+@app.route('/api/sizes')
+@app.route('/covers/api/sizes')
+def get_sizes():
+    return jsonify(SOCIAL_MEDIA_SIZES)
+
+
+@app.route('/api/styles')
+@app.route('/covers/api/styles')
+def get_styles():
+    return jsonify(DESIGN_STYLES)
+
+
+if __name__ == '__main__':
+    print("🎨 Starting AI Cover Generator...")
+    print("📍 URL: http://localhost:5002")
+    print(f"🔑 Google OAuth: {'Enabled' if google else 'Disabled'}")
+    app.run(host='0.0.0.0', port=5002, debug=True)
