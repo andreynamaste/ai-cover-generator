@@ -285,6 +285,30 @@
     <div class="container">
         <h1>📜 История генераций</h1>
         
+        {% if warning_count and warning_count > 0 %}
+        <div style="background: rgba(255, 193, 7, 0.1); border: 2px solid #ffc107; border-radius: 12px; padding: 20px; margin-bottom: 30px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 1.5rem;">⚠️</span>
+                <strong style="font-size: 1.1rem;">Внимание!</strong>
+            </div>
+            <p style="color: #ffc107; line-height: 1.6;">
+                У вас есть {{ warning_count }} записей, которые будут автоматически удалены через {{ 3 - oldest_warning if oldest_warning else 1 }} день(дня).
+                История генераций хранится только 3 дня. Сохраните важные результаты!
+            </p>
+        </div>
+        {% elif oldest_warning and oldest_warning >= 2 %}
+        <div style="background: rgba(255, 193, 7, 0.1); border: 2px solid #ffc107; border-radius: 12px; padding: 20px; margin-bottom: 30px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 1.5rem;">⚠️</span>
+                <strong style="font-size: 1.1rem;">Внимание!</strong>
+            </div>
+            <p style="color: #ffc107; line-height: 1.6;">
+                Ваша история генераций будет автоматически удалена через {{ 3 - oldest_warning }} день(дня).
+                История хранится только 3 дня. Сохраните важные результаты!
+            </p>
+        </div>
+        {% endif %}
+        
         {% if not generations %}
         <div class="empty-state">
             <div class="icon">🎨</div>

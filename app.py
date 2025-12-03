@@ -915,7 +915,7 @@ def generate_cover():
             return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
         
         api_token = user['api_token']
-        openai_token = user.get('openai_token') if user else None
+        openai_token = user['openai_token'] if user and user['openai_token'] else None
         
         data = request.json
         platform = data.get('platform', 'youtube_thumbnail')
@@ -1092,7 +1092,7 @@ def generate_prompt():
         c = conn.cursor()
         c.execute('SELECT openai_token FROM users WHERE id = ?', (session['user_id'],))
         user = c.fetchone()
-        openai_token = user.get('openai_token') if user else None
+        openai_token = user['openai_token'] if user and user['openai_token'] else None
         conn.close()
         
         data = request.json
@@ -1166,7 +1166,7 @@ def fix_prompt_api():
         c = conn.cursor()
         c.execute('SELECT openai_token FROM users WHERE id = ?', (session['user_id'],))
         user = c.fetchone()
-        openai_token = user.get('openai_token') if user else None
+        openai_token = user['openai_token'] if user and user['openai_token'] else None
         conn.close()
         
         # Исправляем промпт
@@ -1192,11 +1192,47 @@ def fix_prompt_api():
         return jsonify({'error': str(e)}), 500
 
 
+def cleanup_old_history():
+    """Удаляет историю генераций старше 3 дней"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        # Удаляем записи старше 3 дней
+        cutoff_date = datetime.now() - timedelta(days=3)
+        c.execute('''
+            DELETE FROM generations 
+            WHERE created_at < ? AND status IN ('completed', 'failed')
+        ''', (cutoff_date.isoformat(),))
+        deleted_count = c.rowcount
+        conn.commit()
+        conn.close()
+        if deleted_count > 0:
+            print(f"🧹 Удалено {deleted_count} записей истории старше 3 дней")
+        return deleted_count
+    except Exception as e:
+        print(f"Ошибка при очистке истории: {e}")
+        return 0
+
+
 @app.route('/covers/history')
 @login_required
 def history():
+    # Автоматическая очистка старых записей
+    cleanup_old_history()
+    
     conn = get_db()
     c = conn.cursor()
+    
+    # Проверяем есть ли записи которые скоро будут удалены (через 3 дня)
+    warning_date = datetime.now() - timedelta(days=2)  # Предупреждение за день до удаления
+    cutoff_date = datetime.now() - timedelta(days=3)
+    c.execute('''
+        SELECT COUNT(*) as count FROM generations 
+        WHERE user_id = ? AND created_at < ? AND created_at > ? AND status IN ('completed', 'failed')
+    ''', (session['user_id'], warning_date.isoformat(), cutoff_date.isoformat()))
+    warning_row = c.fetchone()
+    warning_count = warning_row['count'] if warning_row else 0
+    
     c.execute('''
         SELECT * FROM generations 
         WHERE user_id = ? 
@@ -1204,8 +1240,27 @@ def history():
         LIMIT 50
     ''', (session['user_id'],))
     generations = c.fetchall()
+    
+    # Проверяем возраст самой старой записи
+    oldest_warning = None
+    if generations:
+        oldest = generations[-1]
+        if oldest['created_at']:
+            try:
+                oldest_date = datetime.fromisoformat(oldest['created_at'])
+                days_old = (datetime.now() - oldest_date).days
+                if days_old >= 2:
+                    oldest_warning = days_old
+            except:
+                pass
+    
     conn.close()
-    return render_template('history.html', generations=generations, username=session.get('username'))
+    
+    return render_template('history.html', 
+                         generations=generations, 
+                         username=session.get('username'),
+                         warning_count=warning_count,
+                         oldest_warning=oldest_warning)
 
 
 @app.route('/api/sizes')
@@ -1273,7 +1328,7 @@ def generate_comics():
             return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
         
         api_token = user['api_token']
-        openai_token = user.get('openai_token') if user else None
+        openai_token = user['openai_token'] if user and user['openai_token'] else None
         
         data = request.json
         blocks_count = int(data.get('blocks', 3))  # 1-6 блоков
@@ -1435,9 +1490,9 @@ def generate_caricature():
             return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
         
         api_token = user['api_token']
-        openai_token = user.get('openai_token') if user else None
+        openai_token = user['openai_token'] if user and user['openai_token'] else None
         
-    data = request.json
+        data = request.json
         prompt = data.get('prompt', '').strip()
         image_urls = data.get('image_urls', [])
         
@@ -1515,5 +1570,11 @@ if __name__ == '__main__':
     print("🎨 Starting AI Cover Generator...")
     print("📍 URL: http://localhost:5002")
     print(f"🔑 Google OAuth: {'Enabled' if google else 'Disabled'}")
+    
+    # Автоматическая очистка истории при запуске
+    deleted = cleanup_old_history()
+    if deleted > 0:
+        print(f"🧹 Очищено {deleted} записей истории при запуске")
+    
     # debug=False и threaded=True для стабильной работы с несколькими пользователями
     app.run(host='0.0.0.0', port=5002, debug=False, threaded=True)
