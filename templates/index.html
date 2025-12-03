@@ -996,9 +996,54 @@
     </div>
     
     <script>
-        let selectedPlatform = 'youtube_banner';
-        let selectedStyle = 'modern';
-        let selectedFormat = 'realistic';
+        // Загружаем сохранённое состояние из localStorage
+        let selectedPlatform = localStorage.getItem('selectedPlatform') || 'youtube_banner';
+        let selectedStyle = localStorage.getItem('selectedStyle') || 'modern';
+        let selectedFormat = localStorage.getItem('selectedFormat') || 'realistic';
+        let savedPrompt = localStorage.getItem('savedPrompt') || '';
+        
+        // Функция сохранения состояния
+        function saveState() {
+            localStorage.setItem('selectedPlatform', selectedPlatform);
+            localStorage.setItem('selectedStyle', selectedStyle);
+            localStorage.setItem('selectedFormat', selectedFormat);
+            localStorage.setItem('savedPrompt', document.getElementById('prompt').value);
+        }
+        
+        // Восстанавливаем состояние при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            // Восстанавливаем выбранную платформу
+            const platformBtn = document.querySelector(`.platform-btn[data-platform="${selectedPlatform}"]`);
+            if (platformBtn) {
+                document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+                platformBtn.classList.add('active');
+                const width = platformBtn.dataset.width;
+                const height = platformBtn.dataset.height;
+                document.getElementById('size-info').textContent = `${width} × ${height} px`;
+            }
+            
+            // Восстанавливаем выбранный стиль
+            const styleBtn = document.querySelector(`.style-btn[data-style="${selectedStyle}"]`);
+            if (styleBtn) {
+                document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+                styleBtn.classList.add('active');
+            }
+            
+            // Восстанавливаем выбранный формат
+            const formatBtn = document.querySelector(`.format-btn[data-format="${selectedFormat}"]`);
+            if (formatBtn) {
+                document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+                formatBtn.classList.add('active');
+            }
+            
+            // Восстанавливаем промпт
+            if (savedPrompt) {
+                document.getElementById('prompt').value = savedPrompt;
+            }
+        });
+        
+        // Сохраняем состояние при изменении
+        window.addEventListener('beforeunload', saveState);
         
         // Platform selection
         document.querySelectorAll('.platform-btn').forEach(btn => {
@@ -1006,6 +1051,7 @@
                 document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 selectedPlatform = btn.dataset.platform;
+                localStorage.setItem('selectedPlatform', selectedPlatform);
                 
                 const width = btn.dataset.width;
                 const height = btn.dataset.height;
@@ -1019,6 +1065,7 @@
                 document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 selectedStyle = btn.dataset.style;
+                localStorage.setItem('selectedStyle', selectedStyle);
             });
         });
         
@@ -1028,13 +1075,21 @@
                 document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 selectedFormat = btn.dataset.format;
+                localStorage.setItem('selectedFormat', selectedFormat);
             });
+        });
+        
+        // Сохраняем промпт при вводе
+        document.getElementById('prompt').addEventListener('input', () => {
+            localStorage.setItem('savedPrompt', document.getElementById('prompt').value);
         });
         
         // Example prompts
         document.querySelectorAll('.example-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.getElementById('prompt').value = btn.dataset.prompt;
+                const prompt = btn.dataset.prompt;
+                document.getElementById('prompt').value = prompt;
+                localStorage.setItem('savedPrompt', prompt);
             });
         });
         
@@ -1122,6 +1177,7 @@
         function acceptGeneratedPrompt() {
             const promptText = document.getElementById('generated-prompt-text').textContent;
             document.getElementById('prompt').value = promptText;
+            localStorage.setItem('savedPrompt', promptText);
             document.getElementById('generated-prompt-box').style.display = 'none';
             togglePromptGenerator();
         }
@@ -1133,6 +1189,7 @@
         function editGeneratedPrompt() {
             const promptText = document.getElementById('generated-prompt-text').textContent;
             document.getElementById('prompt').value = promptText;
+            localStorage.setItem('savedPrompt', promptText);
             document.getElementById('generated-prompt-box').style.display = 'none';
         }
         
@@ -1224,6 +1281,7 @@
             document.getElementById('error-message').style.display = 'none';
             document.getElementById('result-placeholder').style.display = 'flex';
             document.getElementById('prompt').value = '';
+            localStorage.setItem('savedPrompt', '');
             // Clear image URLs
             for (let i = 1; i <= 3; i++) {
                 const input = document.getElementById(`image-url-${i}`);
