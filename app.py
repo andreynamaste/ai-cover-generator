@@ -456,6 +456,11 @@ def generate_cover():
         style = data.get('style', 'modern')
         user_prompt = data.get('prompt', '')
         
+        # Получаем ссылки на референсные изображения (до 3 штук)
+        image_urls = data.get('image_urls', [])
+        # Фильтруем пустые ссылки
+        image_urls = [url.strip() for url in image_urls if url and url.strip()][:3]
+        
         if not user_prompt:
             return jsonify({'error': 'Опишите желаемую обложку'}), 400
         
@@ -469,6 +474,7 @@ def generate_cover():
             'Content-Type': 'application/json'
         }
         
+        # Базовый payload для Nano Banana Pro
         payload = {
             "model": "nano-banana-pro",
             "input": {
@@ -478,6 +484,12 @@ def generate_cover():
                 "output_format": "png"
             }
         }
+        
+        # Добавляем референсные изображения если есть
+        if image_urls:
+            payload["input"]["image_prompts"] = [
+                {"url": url, "weight": 0.5} for url in image_urls
+            ]
         
         response = requests.post(
             f"{Config.KIE_API_URL}/createTask",

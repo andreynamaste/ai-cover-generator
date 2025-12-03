@@ -294,6 +294,115 @@
         
         textarea::placeholder { color: var(--gray); }
         
+        /* Images Section */
+        .images-section {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: 12px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        
+        .images-header {
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .images-header:hover {
+            background: rgba(6, 182, 212, 0.1);
+        }
+        
+        .images-header h4 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--accent);
+            margin: 0;
+        }
+        
+        .toggle-icon {
+            color: var(--accent);
+            transition: transform 0.3s;
+        }
+        
+        .toggle-icon.open {
+            transform: rotate(180deg);
+        }
+        
+        .images-content {
+            padding: 0 15px 15px;
+            border-top: 1px solid rgba(6, 182, 212, 0.1);
+        }
+        
+        .images-hint {
+            color: var(--gray);
+            font-size: 0.85rem;
+            margin: 12px 0;
+            line-height: 1.5;
+        }
+        
+        .image-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .image-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .input-label {
+            font-size: 0.85rem;
+            color: var(--gray);
+            min-width: 70px;
+        }
+        
+        .image-url-input {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--white);
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+        
+        .image-url-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(6, 182, 212, 0.1);
+        }
+        
+        .image-url-input::placeholder {
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+        
+        .images-note {
+            color: var(--gray);
+            font-size: 0.8rem;
+            margin-top: 12px;
+            font-style: italic;
+        }
+        
+        .api-info {
+            text-align: center;
+            padding: 10px;
+            margin-top: 15px;
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+        
+        .api-info strong {
+            color: var(--accent);
+        }
+        
         .generate-btn {
             width: 100%;
             padding: 16px;
@@ -485,7 +594,7 @@
     </style>
 </head>
 <body>
-    <header class="header">
+        <header class="header">
         <div class="header-content">
             <a href="/covers/" class="logo">
                 🎨 <span>AI Cover</span> Generator
@@ -500,16 +609,16 @@
                 </div>
                 <a href="/covers/logout">Выйти</a>
             </nav>
-        </div>
-    </header>
-    
+            </div>
+        </header>
+
     <div class="container">
         {% if not has_token %}
         <div class="token-warning">
             <h4>⚠️ API токен не настроен</h4>
             <p>Для генерации обложек необходимо добавить ваш API токен от Kie.ai. Получите бесплатные кредиты при регистрации!</p>
             <a href="/covers/settings">🔑 Добавить токен</a>
-        </div>
+                </div>
         {% endif %}
         
         <div class="main-grid">
@@ -528,7 +637,7 @@
                             <span class="name">{{ platform.name }}</span>
                         </button>
                         {% endfor %}
-                    </div>
+                </div>
                 </div>
                 
                 <!-- Style Selection -->
@@ -554,8 +663,8 @@
                             {{ example.title }}
                         </button>
                         {% endfor %}
-                    </div>
-                </div>
+                                </div>
+                            </div>
             </aside>
             
             <!-- Main Content -->
@@ -567,6 +676,37 @@
                         <div class="size-info" id="size-info">2560 × 1440 px</div>
                     </div>
                     <textarea id="prompt" placeholder="Опишите что должно быть на обложке. Например: Gaming channel banner with neon lights, futuristic style, dark background with purple and blue glow..."></textarea>
+                    
+                    <!-- Reference Images Section -->
+                    <div class="images-section">
+                        <div class="images-header" onclick="toggleImagesSection()">
+                            <h4>📷 Добавить свои фото (опционально)</h4>
+                            <span class="toggle-icon" id="toggle-icon">▼</span>
+                        </div>
+                        <div class="images-content" id="images-content" style="display: none;">
+                            <p class="images-hint">Добавьте до 3 ссылок на фото для использования как референс. Нейросеть учтёт ваши изображения при генерации.</p>
+                            <div class="image-inputs">
+                                <div class="image-input-group">
+                                    <span class="input-label">📷 Фото 1:</span>
+                                    <input type="url" id="image-url-1" class="image-url-input" placeholder="https://example.com/photo1.jpg">
+                                </div>
+                                <div class="image-input-group">
+                                    <span class="input-label">📷 Фото 2:</span>
+                                    <input type="url" id="image-url-2" class="image-url-input" placeholder="https://example.com/photo2.jpg">
+                                </div>
+                                <div class="image-input-group">
+                                    <span class="input-label">📷 Фото 3:</span>
+                                    <input type="url" id="image-url-3" class="image-url-input" placeholder="https://example.com/photo3.jpg">
+                                </div>
+                            </div>
+                            <p class="images-note">💡 Используйте прямые ссылки на изображения (заканчиваются на .jpg, .png, .webp)</p>
+                        </div>
+                    </div>
+
+                    <div class="api-info">
+                        <span>🤖 Powered by <strong>Nano Banana Pro</strong> (Kie.ai)</span>
+                    </div>
+
                     <button class="generate-btn" id="generate-btn" {% if not has_token %}disabled{% endif %}>
                         <span>✨</span>
                         <span>Сгенерировать обложку</span>
@@ -577,15 +717,15 @@
                 <div class="result-section" id="result-section">
                     <div class="result-header">
                         <h3>🖼️ Результат</h3>
-                    </div>
+                                </div>
                     <div class="result-placeholder" id="result-placeholder">
                         <div class="icon">🎨</div>
                         <p>Выберите платформу, стиль и опишите желаемую обложку</p>
-                    </div>
+                            </div>
                     <div class="loading" id="loading" style="display: none;">
                         <div class="spinner"></div>
                         <p id="loading-text">Генерация обложки...</p>
-                    </div>
+                                </div>
                     <div class="result-image" id="result-image" style="display: none;">
                         <img id="generated-image" src="" alt="Generated cover">
                         <div class="result-actions">
@@ -639,6 +779,31 @@
             });
         });
         
+        // Toggle images section
+        function toggleImagesSection() {
+            const content = document.getElementById('images-content');
+            const icon = document.getElementById('toggle-icon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.classList.add('open');
+            } else {
+                content.style.display = 'none';
+                icon.classList.remove('open');
+            }
+        }
+        
+        // Get image URLs
+        function getImageUrls() {
+            const urls = [];
+            for (let i = 1; i <= 3; i++) {
+                const input = document.getElementById(`image-url-${i}`);
+                if (input && input.value.trim()) {
+                    urls.push(input.value.trim());
+                }
+            }
+            return urls;
+        }
+        
         // Generate button
         document.getElementById('generate-btn').addEventListener('click', async () => {
             const prompt = document.getElementById('prompt').value.trim();
@@ -648,6 +813,9 @@
                 return;
             }
             
+            // Get reference image URLs
+            const imageUrls = getImageUrls();
+            
             // Show loading
             document.getElementById('result-placeholder').style.display = 'none';
             document.getElementById('result-image').style.display = 'none';
@@ -656,14 +824,15 @@
             document.getElementById('generate-btn').disabled = true;
             
             try {
-                // Create task
+                // Create task with image URLs
                 const response = await fetch('/covers/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         platform: selectedPlatform,
                         style: selectedStyle,
-                        prompt: prompt
+                        prompt: prompt,
+                        image_urls: imageUrls
                     })
                 });
                 
@@ -719,6 +888,11 @@
             document.getElementById('error-message').style.display = 'none';
             document.getElementById('result-placeholder').style.display = 'flex';
             document.getElementById('prompt').value = '';
+            // Clear image URLs
+            for (let i = 1; i <= 3; i++) {
+                const input = document.getElementById(`image-url-${i}`);
+                if (input) input.value = '';
+            }
         }
     </script>
 </body>
