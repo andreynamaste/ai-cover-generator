@@ -410,12 +410,34 @@
                 
                 if (data.success && !isStopped) {
                     currentTaskIds = data.task_ids.map(t => t.task_id);
-                    // Показываем результат
+                    // Показываем результат с процессом генерации
                     document.getElementById('result').style.display = 'block';
                     const grid = document.getElementById('comicsGrid');
-                    grid.innerHTML = '<p>Генерация начата! Проверяйте статус задач...</p>';
                     
-                    alert('✅ Генерация комикса начата! Проверьте историю генераций.');
+                    // Создаём карточки для каждого блока
+                    grid.innerHTML = data.task_ids.map((task, idx) => `
+                        <div class="comic-panel" id="panel-${task.task_id}">
+                            <div style="background: var(--dark); border-radius: 8px; padding: 20px; text-align: center; min-height: 200px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                                <div class="loading-spinner" style="width: 40px; height: 40px; border: 4px solid rgba(99, 102, 241, 0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
+                                <p style="color: var(--gray); margin-bottom: 10px;">Блок ${task.block} из ${selectedBlocks}</p>
+                                <p style="color: var(--white); font-weight: 600;">⏳ Генерируется...</p>
+                                <p style="color: var(--gray); font-size: 0.85rem; margin-top: 10px;">ID: ${task.task_id}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Добавляем стиль для анимации
+                    if (!document.getElementById('spinner-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'spinner-style';
+                        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+                        document.head.appendChild(style);
+                    }
+                    
+                    // Проверяем статус каждого блока
+                    data.task_ids.forEach((task, idx) => {
+                        checkComicsStatus(task.task_id, task.block, selectedBlocks);
+                    });
                 } else if (!isStopped) {
                     alert('❌ Ошибка: ' + data.error);
                 }
@@ -432,6 +454,43 @@
                 currentTaskIds = [];
             }
         });
+        
+        // Функция проверки статуса блока комикса
+        async function checkComicsStatus(taskId, blockNum, totalBlocks) {
+            if (isStopped) return;
+            
+            try {
+                const response = await fetch(`/covers/api/status/${taskId}`);
+                const data = await response.json();
+                
+                const panel = document.getElementById(`panel-${taskId}`);
+                if (!panel) return;
+                
+                if (data.state === 'success' && data.imageUrl) {
+                    panel.innerHTML = `
+                        <img src="${data.imageUrl}" alt="Block ${blockNum}" style="width: 100%; border-radius: 8px; margin-bottom: 10px;">
+                        <p style="color: var(--success); font-weight: 600;">✅ Блок ${blockNum} готов!</p>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <a href="${data.imageUrl}" target="_blank" style="flex: 1; padding: 8px; background: var(--primary); color: white; text-align: center; border-radius: 6px; text-decoration: none;">👁️ Открыть</a>
+                            <a href="${data.imageUrl}" download style="flex: 1; padding: 8px; background: var(--success); color: white; text-align: center; border-radius: 6px; text-decoration: none;">⬇️ Скачать</a>
+                        </div>
+                    `;
+                } else if (data.state === 'fail') {
+                    panel.innerHTML = `
+                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 20px; text-align: center;">
+                            <p style="color: #ef4444; font-weight: 600;">❌ Блок ${blockNum} не удался</p>
+                            <p style="color: var(--gray); font-size: 0.85rem; margin-top: 10px;">${data.error || 'Ошибка генерации'}</p>
+                        </div>
+                    `;
+                } else {
+                    // Ещё генерируется
+                    setTimeout(() => checkComicsStatus(taskId, blockNum, totalBlocks), 3000);
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+                setTimeout(() => checkComicsStatus(taskId, blockNum, totalBlocks), 3000);
+            }
+        }
     </script>
 </body>
 </html>

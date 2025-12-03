@@ -283,7 +283,14 @@
     </header>
     
     <div class="container">
-        <h1>📜 История генераций</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <h1>📜 История генераций</h1>
+            {% if generations %}
+            <button id="clear-history-btn" style="padding: 12px 24px; background: #ef4444; border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+                🗑️ Очистить историю
+            </button>
+            {% endif %}
+        </div>
         
         {% if warning_count and warning_count > 0 %}
         <div style="background: rgba(255, 193, 7, 0.1); border: 2px solid #ffc107; border-radius: 12px; padding: 20px; margin-bottom: 30px;">
@@ -352,6 +359,39 @@
         </div>
         {% endif %}
     </div>
+    
+    <script>
+        document.getElementById('clear-history-btn')?.addEventListener('click', async function() {
+            if (!confirm('Вы уверены, что хотите очистить всю историю генераций? Это действие нельзя отменить.')) {
+                return;
+            }
+            
+            this.disabled = true;
+            this.textContent = '⏳ Очищаю...';
+            
+            try {
+                const response = await fetch('/covers/api/clear-history', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ История очищена!');
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                    this.disabled = false;
+                    this.textContent = '🗑️ Очистить историю';
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+                this.disabled = false;
+                this.textContent = '🗑️ Очистить историю';
+            }
+        });
+    </script>
 </body>
 </html>
 

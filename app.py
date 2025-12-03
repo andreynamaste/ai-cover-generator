@@ -220,24 +220,71 @@ def fix_prompt_errors(prompt, openai_token=None):
     # Убираем запятые перед точками
     prompt = re.sub(r',\s*\.', '.', prompt)
     
-    # Исправляем частые опечатки
+    # Исправляем частые опечатки (русский язык)
     replacements = {
-        'релакму': 'релаксацию',
-        'релакм': 'релаксация',
+        # Опечатки на русской раскладке
+        'йог': 'йога',
         'йоге': 'йоге',
+        'йоги': 'йоги',
+        'йогу': 'йогу',
         'сделай': 'создай',
+        'сделать': 'создать',
+        'делай': 'создай',
+        'делать': 'создать',
         'пост про': 'пост о',
         'банер': 'баннер',
         'обложка для': 'обложка',
         'картинка': 'изображение',
         'фото': 'фотография',
+        'оналнй': 'онлайн',
+        'онагнй': 'онлайн',
+        'дома': 'дома',
+        'природе': 'природе',
+        'природы': 'природы',
+        'реклама': 'реклама',
+        'рекламу': 'рекламу',
+        'рекламы': 'рекламы',
+        'промт': 'промпт',
+        'промта': 'промпта',
+        'промту': 'промпту',
+        'промты': 'промпты',
+        'промтов': 'промптов',
+        'дробтин': 'дроботкин',
+        'андрея': 'андрея',
+        'андрей': 'андрей',
+        'ищет': 'ищет',
+        'ищеть': 'ищет',
+        'занятий': 'занятий',
+        'занятия': 'занятия',
+        'занятие': 'занятие',
+        'заняться': 'заняться',
+        'заняться': 'заняться',
+        'место': 'место',
+        'места': 'места',
+        'месте': 'месте',
+        'для': 'для',
+        'дла': 'для',
+        'дл': 'для',
+        'улице': 'улице',
+        'улица': 'улица',
+        'улицы': 'улицы',
+        'заматься': 'заняться',
+        'замтаться': 'заняться',
+        'замтаться': 'заняться',
+        'йогой': 'йогой',
+        'його': 'йогой',
+        'йогу': 'йогу',
+        'йог': 'йога',
+        # Общие исправления
+        'релакму': 'релаксацию',
+        'релакм': 'релаксация',
         'ошибки': 'ошибки',
         'исправь': 'исправь',
         'текст': 'текст'
     }
     
     for wrong, correct in replacements.items():
-        prompt = re.sub(r'\b' + wrong + r'\b', correct, prompt, flags=re.IGNORECASE)
+        prompt = re.sub(r'\b' + re.escape(wrong) + r'\b', correct, prompt, flags=re.IGNORECASE)
     
     # Убираем лишние запятые в конце
     prompt = prompt.rstrip(',. ')
@@ -1135,15 +1182,19 @@ def generate_prompt():
         style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
         format_config = IMAGE_FORMATS.get(image_format, IMAGE_FORMATS['realistic'])
         
+        # Сначала исправляем тему и описание (русские слова)
+        fixed_topic = fix_prompt_errors(topic, openai_token)
+        fixed_description = fix_prompt_errors(description, openai_token) if description else ""
+        
         # Генерируем профессиональный промпт
         prompt_parts = []
         
-        # Основная тема
-        prompt_parts.append(topic)
+        # Основная тема (исправленная)
+        prompt_parts.append(fixed_topic)
         
-        # Дополнительное описание если есть
-        if description:
-            prompt_parts.append(description)
+        # Дополнительное описание если есть (исправленное)
+        if fixed_description:
+            prompt_parts.append(fixed_description)
         
         # Стиль дизайна
         prompt_parts.append(style_config['prompt_prefix'])
@@ -1157,7 +1208,7 @@ def generate_prompt():
         # Собираем финальный промпт
         generated_prompt = ", ".join(prompt_parts)
         
-        # Исправляем ошибки в сгенерированном промпте (используя OpenAI если токен есть)
+        # Исправляем ошибки в финальном промпте (используя OpenAI если токен есть)
         generated_prompt = fix_prompt_errors(generated_prompt, openai_token)
         
         return jsonify({
@@ -1237,6 +1288,24 @@ def cleanup_old_history():
     except Exception as e:
         print(f"Ошибка при очистке истории: {e}")
         return 0
+
+
+@app.route('/api/clear-history', methods=['POST'])
+@app.route('/covers/api/clear-history', methods=['POST'])
+@login_required
+def clear_history():
+    """Очистка истории генераций пользователя"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        # Удаляем все записи пользователя
+        c.execute('DELETE FROM generations WHERE user_id = ?', (session['user_id'],))
+        deleted_count = c.rowcount
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'deleted': deleted_count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/covers/history')
