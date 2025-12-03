@@ -54,8 +54,9 @@ os.makedirs(Config.OUTPUT_FOLDER, exist_ok=True)
 
 # Инициализация базы данных
 def init_db():
-    conn = sqlite3.connect(Config.DATABASE, timeout=30)
+    conn = sqlite3.connect(Config.DATABASE, timeout=60, check_same_thread=False)
     conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=60000')
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -94,9 +95,17 @@ def init_db():
 init_db()
 
 def get_db():
-    conn = sqlite3.connect(Config.DATABASE, timeout=30)
+    """Получить соединение с БД с правильными настройками для многопользовательского доступа"""
+    conn = sqlite3.connect(
+        Config.DATABASE, 
+        timeout=60,  # Увеличенный таймаут
+        check_same_thread=False,  # Разрешить многопоточность
+        isolation_level=None  # Autocommit режим
+    )
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=60000')  # 60 секунд ожидания при блокировке
+    conn.execute('PRAGMA synchronous=NORMAL')  # Быстрее, но безопасно
     return conn
 
 def hash_password(password):
@@ -602,4 +611,5 @@ if __name__ == '__main__':
     print("🎨 Starting AI Cover Generator...")
     print("📍 URL: http://localhost:5002")
     print(f"🔑 Google OAuth: {'Enabled' if google else 'Disabled'}")
-    app.run(host='0.0.0.0', port=5002, debug=True)
+    # debug=False и threaded=True для стабильной работы с несколькими пользователями
+    app.run(host='0.0.0.0', port=5002, debug=False, threaded=True)
