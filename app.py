@@ -15,7 +15,10 @@ import uuid
 import hashlib
 import sqlite3
 import re
-from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__)
@@ -99,6 +102,17 @@ def init_db():
             prompt TEXT,
             status TEXT,
             image_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            token TEXT UNIQUE NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
@@ -485,6 +499,147 @@ def login():
 def logout():
     session.clear()
     return redirect('/covers/login')
+
+
+def send_password_reset_email(email, reset_link):
+    """Отправка email с ссылкой для восстановления пароля"""
+    try:
+        # Простая реализация через SMTP (можно настроить через переменные окружения)
+        smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+        smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+        smtp_user = os.environ.get('SMTP_USER', '')
+        smtp_password = os.environ.get('SMTP_PASSWORD', '')
+        
+        if not smtp_user or not smtp_password:
+            # Если SMTP не настроен, просто логируем (в продакшене нужно настроить)
+            print(f"Password reset link for {email}: {reset_link}")
+            return True
+        
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = email
+        msg['Subject'] = 'Восстановление пароля - AI Cover Generator'
+        
+        body = f"""
+        Здравствуйте!
+        
+        Вы запросили восстановление пароля для AI Cover Generator.
+        
+        Для восстановления пароля перейдите по ссылке:
+        {reset_link}
+        
+        Ссылка действительна в течение 1 часа.
+        
+        Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.
+        
+        С уважением,
+        Команда AI Cover Generator
+        """
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Email send error: {e}")
+        # В режиме разработки просто логируем
+        return True
+
+
+@app.route('/covers/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        
+        if not email:
+            return render_template('forgot-password.html', error='Введите email')
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT id, username FROM users WHERE email = ?', (email,))
+        user = c.fetchone()
+        
+        if user:
+            # Создаём токен для восстановления
+            reset_token = str(uuid.uuid4())
+            expires_at = datetime.now() + timedelta(hours=1)
+            
+            c.execute('''
+                INSERT INTO password_resets (user_id, token, expires_at)
+                VALUES (?, ?, ?)
+            ''', (user['id'], reset_token, expires_at))
+            conn.commit()
+            conn.close()
+            
+            # Отправляем email
+            reset_link = f"https://2msp.webversy.top/covers/reset-password?token={reset_token}"
+            send_password_reset_email(email, reset_link)
+            
+            return render_template('forgot-password.html', 
+                                 success='Ссылка для восстановления пароля отправлена на ваш email. Проверьте почту (включая папку "Спам").')
+        else:
+            conn.close()
+            # Не раскрываем существование пользователя
+            return render_template('forgot-password.html', 
+                                 success='Если такой email существует, ссылка для восстановления пароля отправлена.')
+    
+    return render_template('forgot-password.html')
+
+
+@app.route('/covers/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    token = request.args.get('token') or request.form.get('token', '')
+    
+    if not token:
+        return redirect('/covers/forgot-password')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''
+        SELECT pr.user_id, pr.expires_at, pr.used, u.email
+        FROM password_resets pr
+        JOIN users u ON pr.user_id = u.id
+        WHERE pr.token = ? AND pr.used = 0
+    ''', (token,))
+    reset_data = c.fetchone()
+    
+    if not reset_data:
+        conn.close()
+        return render_template('forgot-password.html', error='Недействительная или истёкшая ссылка')
+    
+    expires_at = datetime.fromisoformat(reset_data['expires_at'])
+    if datetime.now() > expires_at:
+        conn.close()
+        return render_template('forgot-password.html', error='Ссылка истекла. Запросите новую.')
+    
+    if request.method == 'POST':
+        new_password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not new_password or len(new_password) < 6:
+            conn.close()
+            return render_template('reset-password.html', token=token, error='Пароль должен быть минимум 6 символов')
+        
+        if new_password != confirm_password:
+            conn.close()
+            return render_template('reset-password.html', token=token, error='Пароли не совпадают')
+        
+        # Обновляем пароль
+        c.execute('UPDATE users SET password_hash = ? WHERE id = ?', 
+                  (hash_password(new_password), reset_data['user_id']))
+        c.execute('UPDATE password_resets SET used = 1 WHERE token = ?', (token,))
+        conn.commit()
+        conn.close()
+        
+        return redirect('/covers/login?password_reset=success')
+    
+    conn.close()
+    return render_template('reset-password.html', token=token)
 
 
 @app.route('/covers/settings', methods=['GET', 'POST'])
