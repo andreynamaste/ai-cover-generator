@@ -4,15 +4,17 @@
 С системой регистрации, личными API токенами и Google OAuth
 """
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
 from authlib.integrations.flask_client import OAuth
+from werkzeug.utils import secure_filename
 import requests
 import time
 import os
 import uuid
 import hashlib
 import sqlite3
+import re
 from datetime import datetime
 from functools import wraps
 
@@ -58,9 +60,16 @@ else:
 class Config:
     KIE_API_URL = "https://api.kie.ai/api/v1/jobs"
     OUTPUT_FOLDER = "/tmp/cover-generator"
+    UPLOAD_FOLDER = "/var/www/cover-generator/uploads"
     DATABASE = "/var/www/cover-generator/users.db"
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 os.makedirs(Config.OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = Config.UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
 
 # Инициализация базы данных
 def init_db():
@@ -120,6 +129,53 @@ def get_db():
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+
+def fix_prompt_errors(prompt):
+    """
+    Исправляет ошибки в промпте:
+    - Убирает лишние запятые
+    - Исправляет опечатки
+    - Делает текст понятным и профессиональным
+    """
+    if not prompt:
+        return prompt
+    
+    # Убираем лишние пробелы
+    prompt = ' '.join(prompt.split())
+    
+    # Убираем двойные запятые
+    prompt = re.sub(r',{2,}', ',', prompt)
+    
+    # Убираем запятые перед точками
+    prompt = re.sub(r',\s*\.', '.', prompt)
+    
+    # Исправляем частые опечатки
+    replacements = {
+        'релакму': 'релаксацию',
+        'релакм': 'релаксация',
+        'йоге': 'йоге',
+        'сделай': 'создай',
+        'пост про': 'пост о',
+        'банер': 'баннер',
+        'обложка для': 'обложка',
+        'картинка': 'изображение',
+        'фото': 'фотография'
+    }
+    
+    for wrong, correct in replacements.items():
+        prompt = re.sub(r'\b' + wrong + r'\b', correct, prompt, flags=re.IGNORECASE)
+    
+    # Убираем лишние запятые в конце
+    prompt = prompt.rstrip(',. ')
+    
+    # Первая буква заглавная
+    if prompt and prompt[0].islower():
+        prompt = prompt[0].upper() + prompt[1:]
+    
+    return prompt
 
 def login_required(f):
     @wraps(f)
@@ -224,7 +280,7 @@ IMAGE_FORMATS = {
     }
 }
 
-# Стили дизайна
+# Стили дизайна (расширенный список)
 DESIGN_STYLES = {
     "modern": {"name": "Современный", "prompt_prefix": "Modern minimalist design with clean lines, bold typography, gradient backgrounds,", "icon": "✨"},
     "neon": {"name": "Неон", "prompt_prefix": "Neon cyberpunk style with glowing effects, dark background, vibrant neon colors pink blue purple,", "icon": "💜"},
@@ -235,7 +291,27 @@ DESIGN_STYLES = {
     "tech": {"name": "Технологии", "prompt_prefix": "High-tech futuristic design, circuit patterns, blue tech glow, digital elements,", "icon": "🤖"},
     "gaming": {"name": "Игровой", "prompt_prefix": "Epic gaming style, dynamic action, bold colors, esports aesthetic,", "icon": "🎮"},
     "business": {"name": "Бизнес", "prompt_prefix": "Professional corporate design, clean layout, trustworthy colors blue gray,", "icon": "💼"},
-    "creative": {"name": "Креативный", "prompt_prefix": "Creative artistic design, unique visual elements, eye-catching composition,", "icon": "🎨"}
+    "creative": {"name": "Креативный", "prompt_prefix": "Creative artistic design, unique visual elements, eye-catching composition,", "icon": "🎨"},
+    "minimalist": {"name": "Минимализм", "prompt_prefix": "Minimalist design, lots of white space, simple geometric shapes, clean and elegant,", "icon": "⚪"},
+    "watercolor": {"name": "Акварель", "prompt_prefix": "Watercolor painting style, soft brush strokes, flowing colors, artistic watercolor effect,", "icon": "🎨"},
+    "sketch": {"name": "Эскиз", "prompt_prefix": "Hand-drawn sketch style, pencil drawing, artistic sketch, line art,", "icon": "✏️"},
+    "pop_art": {"name": "Поп-арт", "prompt_prefix": "Pop art style, bold colors, comic book aesthetic, vibrant pop culture design,", "icon": "🖼️"},
+    "abstract": {"name": "Абстрактный", "prompt_prefix": "Abstract art, geometric shapes, flowing forms, contemporary abstract design,", "icon": "🔷"},
+    "luxury": {"name": "Люкс", "prompt_prefix": "Luxury premium design, gold accents, elegant typography, sophisticated high-end aesthetic,", "icon": "💎"},
+    "sport": {"name": "Спорт", "prompt_prefix": "Dynamic sports design, athletic energy, motion blur effects, sporty vibrant colors,", "icon": "⚽"},
+    "food": {"name": "Еда", "prompt_prefix": "Appetizing food photography style, warm lighting, delicious presentation, culinary aesthetic,", "icon": "🍕"},
+    "travel": {"name": "Путешествия", "prompt_prefix": "Travel adventure style, scenic landscapes, wanderlust aesthetic, exploration theme,", "icon": "✈️"},
+    "fashion": {"name": "Мода", "prompt_prefix": "Fashion editorial style, elegant models, stylish composition, trendy fashion design,", "icon": "👗"}
+}
+
+# Примеры для форматов (одна тема в разных стилях)
+FORMAT_EXAMPLES = {
+    "banana_ad": {
+        "topic": "Реклама бананов",
+        "realistic": "https://i.imgur.com/realistic-banana.jpg",  # Замените на реальные URL
+        "cartoon": "https://i.imgur.com/cartoon-banana.jpg",
+        "anime": "https://i.imgur.com/anime-banana.jpg"
+    }
 }
 
 PROMPT_EXAMPLES = [
@@ -464,9 +540,42 @@ def index():
                          sizes=SOCIAL_MEDIA_SIZES,
                          styles=DESIGN_STYLES,
                          formats=IMAGE_FORMATS,
+                         format_examples=FORMAT_EXAMPLES,
                          examples=PROMPT_EXAMPLES,
                          username=session.get('username'),
                          has_token=has_token)
+
+
+@app.route('/api/upload', methods=['POST'])
+@app.route('/covers/api/upload', methods=['POST'])
+@login_required
+def upload_file():
+    """Загрузка файлов с компьютера"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл не выбран'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Добавляем уникальный ID чтобы избежать конфликтов
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        filepath = os.path.join(Config.UPLOAD_FOLDER, unique_filename)
+        file.save(filepath)
+        
+        # Возвращаем URL для доступа к файлу
+        file_url = f"/covers/uploads/{unique_filename}"
+        return jsonify({'success': True, 'url': file_url, 'filename': unique_filename})
+    
+    return jsonify({'error': 'Неподдерживаемый формат файла'}), 400
+
+
+@app.route('/covers/uploads/<filename>')
+def uploaded_file(filename):
+    """Отдача загруженных файлов"""
+    return send_from_directory(Config.UPLOAD_FOLDER, filename)
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -492,10 +601,22 @@ def generate_cover():
         image_format = data.get('format', 'realistic')  # realistic, cartoon, anime
         user_prompt = data.get('prompt', '')
         
-        # Получаем ссылки на референсные изображения (до 3 штук)
+        # Исправляем ошибки в промпте
+        user_prompt = fix_prompt_errors(user_prompt)
+        
+        # Получаем ссылки на референсные изображения (до 5 штук)
         image_urls = data.get('image_urls', [])
-        # Фильтруем пустые ссылки
-        image_urls = [url.strip() for url in image_urls if url and url.strip()][:3]
+        # Фильтруем пустые ссылки и конвертируем локальные URL в полные
+        processed_urls = []
+        for url in image_urls:
+            url = url.strip()
+            if not url:
+                continue
+            # Если это локальный URL загруженного файла, конвертируем в полный
+            if url.startswith('/covers/uploads/'):
+                url = f"https://2msp.webversy.top{url}"
+            processed_urls.append(url)
+        image_urls = processed_urls[:5]  # До 5 фото
         
         if not user_prompt:
             return jsonify({'error': 'Опишите желаемую обложку'}), 400
@@ -504,7 +625,7 @@ def generate_cover():
         style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
         format_config = IMAGE_FORMATS.get(image_format, IMAGE_FORMATS['realistic'])
         
-        # Собираем полный промпт с форматом
+        # Собираем полный промпт с форматом (исправленный)
         full_prompt = f"{style_config['prompt_prefix']} {user_prompt}, {format_config['prompt_suffix']}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
         
         headers = {
@@ -671,6 +792,9 @@ def generate_prompt():
         
         # Собираем финальный промпт
         generated_prompt = ", ".join(prompt_parts)
+        
+        # Исправляем ошибки в сгенерированном промпте
+        generated_prompt = fix_prompt_errors(generated_prompt)
         
         return jsonify({
             'success': True,
