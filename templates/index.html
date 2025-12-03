@@ -236,6 +236,40 @@
             background: rgba(236, 72, 153, 0.2);
         }
         
+        .style-btn {
+            position: relative;
+        }
+        
+        .style-preview {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 10px;
+            width: 300px;
+            height: 200px;
+            background: var(--dark-light);
+            border: 2px solid var(--secondary);
+            border-radius: 12px;
+            padding: 10px;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        .style-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        
+        .style-btn:hover .style-preview {
+            opacity: 1;
+        }
+        
         /* Main Content */
         .main-content {
             display: flex;
@@ -925,9 +959,15 @@
                     <div class="style-list">
                         {% for key, style in styles.items() %}
                         <button class="style-btn {% if loop.first %}active{% endif %}" 
-                                data-style="{{ key }}">
+                                data-style="{{ key }}"
+                                data-preview="{{ style.preview if style.preview else '' }}">
                             <span>{{ style.icon }}</span>
                             <span>{{ style.name }}</span>
+                            {% if style.preview %}
+                            <div class="style-preview">
+                                <img src="{{ style.preview }}" alt="{{ style.name }}" loading="lazy">
+                            </div>
+                            {% endif %}
                         </button>
                         {% endfor %}
                 </div>

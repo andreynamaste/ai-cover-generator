@@ -298,7 +298,7 @@
             
             <form method="POST" style="margin-top: 20px;">
                 <div class="form-group">
-                    <label>API Токен</label>
+                    <label>API Токен Kie.ai</label>
                     <input type="text" name="api_token" 
                            value="{{ user.api_token if user.api_token else '' }}"
                            placeholder="Вставьте ваш API ключ от Kie.ai">
@@ -308,7 +308,19 @@
                     </small>
                 </div>
                 
-                <button type="submit" class="btn">💾 Сохранить токен</button>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>🤖 OpenAI Токен (опционально)</label>
+                    <input type="text" name="openai_token" 
+                           value="{{ user.openai_token if user.openai_token else '' }}"
+                           placeholder="sk-... (для исправления ошибок в промптах)">
+                    <small>
+                        Используется для профессионального исправления ошибок в промптах с помощью GPT.
+                        Без токена используется бесплатный метод исправления.
+                        <a href="https://platform.openai.com/api-keys" target="_blank">Получить токен →</a>
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn">💾 Сохранить токены</button>
             </form>
             
             <div class="info-box">

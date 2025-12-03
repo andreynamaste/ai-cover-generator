@@ -88,10 +88,16 @@ def init_db():
             password_hash TEXT,
             google_id TEXT,
             api_token TEXT,
+            openai_token TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             generations_count INTEGER DEFAULT 0
         )
     ''')
+    # Добавляем колонку openai_token если её нет
+    try:
+        c.execute('ALTER TABLE users ADD COLUMN openai_token TEXT')
+    except:
+        pass
     c.execute('''
         CREATE TABLE IF NOT EXISTS generations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -147,16 +153,64 @@ def hash_password(password):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
 
-def fix_prompt_errors(prompt):
+def fix_prompt_with_openai(prompt, openai_token):
+    """Исправляет промпт используя OpenAI API"""
+    try:
+        headers = {
+            'Authorization': f'Bearer {openai_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Ты помощник для исправления промптов для генерации изображений. Исправь все ошибки, опечатки, сделай текст понятным, профессиональным и читаемым. Сохрани смысл и идею, но улучши формулировку. Ответь ТОЛЬКО исправленным текстом, без дополнительных комментариев."
+                },
+                {
+                    "role": "user",
+                    "content": f"Исправь этот промпт для генерации изображения: {prompt}"
+                }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 500
+        }
+        
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            fixed_prompt = result['choices'][0]['message']['content'].strip()
+            return fixed_prompt
+        else:
+            print(f"OpenAI API error: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"OpenAI error: {e}")
+        return None
+
+def fix_prompt_errors(prompt, openai_token=None):
     """
     Исправляет ошибки в промпте:
-    - Убирает лишние запятые
-    - Исправляет опечатки
-    - Делает текст понятным и профессиональным
+    - Сначала пытается использовать OpenAI если токен есть
+    - Иначе использует бесплатный метод
     """
     if not prompt:
         return prompt
     
+    # Пытаемся использовать OpenAI если токен есть
+    if openai_token:
+        fixed = fix_prompt_with_openai(prompt, openai_token)
+        if fixed:
+            return fixed
+    
+    # Бесплатный метод исправления
     # Убираем лишние пробелы
     prompt = ' '.join(prompt.split())
     
@@ -176,7 +230,10 @@ def fix_prompt_errors(prompt):
         'банер': 'баннер',
         'обложка для': 'обложка',
         'картинка': 'изображение',
-        'фото': 'фотография'
+        'фото': 'фотография',
+        'ошибки': 'ошибки',
+        'исправь': 'исправь',
+        'текст': 'текст'
     }
     
     for wrong, correct in replacements.items():
@@ -294,28 +351,128 @@ IMAGE_FORMATS = {
     }
 }
 
-# Стили дизайна (расширенный список)
+# Стили дизайна (расширенный список с preview изображениями)
 DESIGN_STYLES = {
-    "modern": {"name": "Современный", "prompt_prefix": "Modern minimalist design with clean lines, bold typography, gradient backgrounds,", "icon": "✨"},
-    "neon": {"name": "Неон", "prompt_prefix": "Neon cyberpunk style with glowing effects, dark background, vibrant neon colors pink blue purple,", "icon": "💜"},
-    "gradient": {"name": "Градиент", "prompt_prefix": "Beautiful gradient background with smooth color transitions, professional look,", "icon": "🌈"},
-    "3d": {"name": "3D Графика", "prompt_prefix": "3D rendered elements, glossy materials, depth and shadows, professional 3D design,", "icon": "🎮"},
-    "vintage": {"name": "Винтаж", "prompt_prefix": "Vintage retro style, warm colors, nostalgic feel, classic typography,", "icon": "📻"},
-    "nature": {"name": "Природа", "prompt_prefix": "Natural elements, green plants, organic shapes, eco-friendly aesthetic,", "icon": "🌿"},
-    "tech": {"name": "Технологии", "prompt_prefix": "High-tech futuristic design, circuit patterns, blue tech glow, digital elements,", "icon": "🤖"},
-    "gaming": {"name": "Игровой", "prompt_prefix": "Epic gaming style, dynamic action, bold colors, esports aesthetic,", "icon": "🎮"},
-    "business": {"name": "Бизнес", "prompt_prefix": "Professional corporate design, clean layout, trustworthy colors blue gray,", "icon": "💼"},
-    "creative": {"name": "Креативный", "prompt_prefix": "Creative artistic design, unique visual elements, eye-catching composition,", "icon": "🎨"},
-    "minimalist": {"name": "Минимализм", "prompt_prefix": "Minimalist design, lots of white space, simple geometric shapes, clean and elegant,", "icon": "⚪"},
-    "watercolor": {"name": "Акварель", "prompt_prefix": "Watercolor painting style, soft brush strokes, flowing colors, artistic watercolor effect,", "icon": "🎨"},
-    "sketch": {"name": "Эскиз", "prompt_prefix": "Hand-drawn sketch style, pencil drawing, artistic sketch, line art,", "icon": "✏️"},
-    "pop_art": {"name": "Поп-арт", "prompt_prefix": "Pop art style, bold colors, comic book aesthetic, vibrant pop culture design,", "icon": "🖼️"},
-    "abstract": {"name": "Абстрактный", "prompt_prefix": "Abstract art, geometric shapes, flowing forms, contemporary abstract design,", "icon": "🔷"},
-    "luxury": {"name": "Люкс", "prompt_prefix": "Luxury premium design, gold accents, elegant typography, sophisticated high-end aesthetic,", "icon": "💎"},
-    "sport": {"name": "Спорт", "prompt_prefix": "Dynamic sports design, athletic energy, motion blur effects, sporty vibrant colors,", "icon": "⚽"},
-    "food": {"name": "Еда", "prompt_prefix": "Appetizing food photography style, warm lighting, delicious presentation, culinary aesthetic,", "icon": "🍕"},
-    "travel": {"name": "Путешествия", "prompt_prefix": "Travel adventure style, scenic landscapes, wanderlust aesthetic, exploration theme,", "icon": "✈️"},
-    "fashion": {"name": "Мода", "prompt_prefix": "Fashion editorial style, elegant models, stylish composition, trendy fashion design,", "icon": "👗"}
+    "modern": {
+        "name": "Современный", 
+        "prompt_prefix": "Modern minimalist design with clean lines, bold typography, gradient backgrounds,", 
+        "icon": "✨",
+        "preview": "https://images.unsplash.com/photo-1558655146-364adaf1fcc9?w=400&h=300&fit=crop"
+    },
+    "neon": {
+        "name": "Неон", 
+        "prompt_prefix": "Neon cyberpunk style with glowing effects, dark background, vibrant neon colors pink blue purple,", 
+        "icon": "💜",
+        "preview": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=300&fit=crop"
+    },
+    "gradient": {
+        "name": "Градиент", 
+        "prompt_prefix": "Beautiful gradient background with smooth color transitions, professional look,", 
+        "icon": "🌈",
+        "preview": "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=300&fit=crop"
+    },
+    "3d": {
+        "name": "3D Графика", 
+        "prompt_prefix": "3D rendered elements, glossy materials, depth and shadows, professional 3D design,", 
+        "icon": "🎮",
+        "preview": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop"
+    },
+    "vintage": {
+        "name": "Винтаж", 
+        "prompt_prefix": "Vintage retro style, warm colors, nostalgic feel, classic typography,", 
+        "icon": "📻",
+        "preview": "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=400&h=300&fit=crop"
+    },
+    "nature": {
+        "name": "Природа", 
+        "prompt_prefix": "Natural elements, green plants, organic shapes, eco-friendly aesthetic,", 
+        "icon": "🌿",
+        "preview": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=300&fit=crop"
+    },
+    "tech": {
+        "name": "Технологии", 
+        "prompt_prefix": "High-tech futuristic design, circuit patterns, blue tech glow, digital elements,", 
+        "icon": "🤖",
+        "preview": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=300&fit=crop"
+    },
+    "gaming": {
+        "name": "Игровой", 
+        "prompt_prefix": "Epic gaming style, dynamic action, bold colors, esports aesthetic,", 
+        "icon": "🎮",
+        "preview": "https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=400&h=300&fit=crop"
+    },
+    "business": {
+        "name": "Бизнес", 
+        "prompt_prefix": "Professional corporate design, clean layout, trustworthy colors blue gray,", 
+        "icon": "💼",
+        "preview": "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=400&h=300&fit=crop"
+    },
+    "creative": {
+        "name": "Креативный", 
+        "prompt_prefix": "Creative artistic design, unique visual elements, eye-catching composition,", 
+        "icon": "🎨",
+        "preview": "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=400&h=300&fit=crop"
+    },
+    "minimalist": {
+        "name": "Минимализм", 
+        "prompt_prefix": "Minimalist design, lots of white space, simple geometric shapes, clean and elegant,", 
+        "icon": "⚪",
+        "preview": "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=300&fit=crop"
+    },
+    "watercolor": {
+        "name": "Акварель", 
+        "prompt_prefix": "Watercolor painting style, soft brush strokes, flowing colors, artistic watercolor effect,", 
+        "icon": "🎨",
+        "preview": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop"
+    },
+    "sketch": {
+        "name": "Эскиз", 
+        "prompt_prefix": "Hand-drawn sketch style, pencil drawing, artistic sketch, line art,", 
+        "icon": "✏️",
+        "preview": "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=400&h=300&fit=crop"
+    },
+    "pop_art": {
+        "name": "Поп-арт", 
+        "prompt_prefix": "Pop art style, bold colors, comic book aesthetic, vibrant pop culture design,", 
+        "icon": "🖼️",
+        "preview": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop"
+    },
+    "abstract": {
+        "name": "Абстрактный", 
+        "prompt_prefix": "Abstract art, geometric shapes, flowing forms, contemporary abstract design,", 
+        "icon": "🔷",
+        "preview": "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=300&fit=crop"
+    },
+    "luxury": {
+        "name": "Люкс", 
+        "prompt_prefix": "Luxury premium design, gold accents, elegant typography, sophisticated high-end aesthetic,", 
+        "icon": "💎",
+        "preview": "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=400&h=300&fit=crop"
+    },
+    "sport": {
+        "name": "Спорт", 
+        "prompt_prefix": "Dynamic sports design, athletic energy, motion blur effects, sporty vibrant colors,", 
+        "icon": "⚽",
+        "preview": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop"
+    },
+    "food": {
+        "name": "Еда", 
+        "prompt_prefix": "Appetizing food photography style, warm lighting, delicious presentation, culinary aesthetic,", 
+        "icon": "🍕",
+        "preview": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop"
+    },
+    "travel": {
+        "name": "Путешествия", 
+        "prompt_prefix": "Travel adventure style, scenic landscapes, wanderlust aesthetic, exploration theme,", 
+        "icon": "✈️",
+        "preview": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=300&fit=crop"
+    },
+    "fashion": {
+        "name": "Мода", 
+        "prompt_prefix": "Fashion editorial style, elegant models, stylish composition, trendy fashion design,", 
+        "icon": "👗",
+        "preview": "https://images.unsplash.com/photo-1445205170230-053b83016050?w=400&h=300&fit=crop"
+    }
 }
 
 # Примеры для форматов (одна тема в разных стилях)
@@ -658,10 +815,12 @@ def settings():
     
     if request.method == 'POST':
         api_token = request.form.get('api_token', '').strip()
-        c.execute('UPDATE users SET api_token = ? WHERE id = ?', (api_token, session['user_id']))
+        openai_token = request.form.get('openai_token', '').strip()
+        c.execute('UPDATE users SET api_token = ?, openai_token = ? WHERE id = ?', 
+                  (api_token, openai_token if openai_token else None, session['user_id']))
         conn.commit()
         conn.close()
-        return render_template('settings.html', user=user, success='API токен сохранён!', google_enabled=bool(google))
+        return render_template('settings.html', user=user, success='Токены сохранены!', google_enabled=bool(google))
     
     conn.close()
     return render_template('settings.html', user=user, success=success_msg, google_enabled=bool(google))
@@ -738,10 +897,10 @@ def uploaded_file(filename):
 @login_required
 def generate_cover():
     try:
-        # Получаем токен пользователя
+        # Получаем токены пользователя
         conn = get_db()
         c = conn.cursor()
-        c.execute('SELECT api_token FROM users WHERE id = ?', (session['user_id'],))
+        c.execute('SELECT api_token, openai_token FROM users WHERE id = ?', (session['user_id'],))
         user = c.fetchone()
         conn.close()
         
@@ -749,6 +908,7 @@ def generate_cover():
             return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
         
         api_token = user['api_token']
+        openai_token = user.get('openai_token') if user else None
         
         data = request.json
         platform = data.get('platform', 'youtube_thumbnail')
@@ -756,8 +916,8 @@ def generate_cover():
         image_format = data.get('format', 'realistic')  # realistic, cartoon, anime
         user_prompt = data.get('prompt', '')
         
-        # Исправляем ошибки в промпте
-        user_prompt = fix_prompt_errors(user_prompt)
+        # Исправляем ошибки в промпте (используя OpenAI если токен есть)
+        user_prompt = fix_prompt_errors(user_prompt, openai_token)
         
         # Получаем ссылки на референсные изображения (до 5 штук)
         image_urls = data.get('image_urls', [])
@@ -911,6 +1071,14 @@ def check_status(task_id):
 def generate_prompt():
     """Генератор профессиональных промптов на основе темы и желаний пользователя"""
     try:
+        # Получаем OpenAI токен пользователя
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT openai_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        openai_token = user.get('openai_token') if user else None
+        conn.close()
+        
         data = request.json
         topic = data.get('topic', '').strip()
         description = data.get('description', '').strip()
@@ -948,8 +1116,8 @@ def generate_prompt():
         # Собираем финальный промпт
         generated_prompt = ", ".join(prompt_parts)
         
-        # Исправляем ошибки в сгенерированном промпте
-        generated_prompt = fix_prompt_errors(generated_prompt)
+        # Исправляем ошибки в сгенерированном промпте (используя OpenAI если токен есть)
+        generated_prompt = fix_prompt_errors(generated_prompt, openai_token)
         
         return jsonify({
             'success': True,
@@ -959,6 +1127,49 @@ def generate_prompt():
                 f"Укажите цветовую гамму",
                 f"Опишите настроение (энергичное, спокойное, драматичное)"
             ]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/fix-prompt', methods=['POST'])
+@app.route('/covers/api/fix-prompt', methods=['POST'])
+@login_required
+def fix_prompt_api():
+    """API для исправления промпта с помощью OpenAI"""
+    try:
+        data = request.json
+        prompt = data.get('prompt', '').strip()
+        
+        if not prompt:
+            return jsonify({'error': 'Введите промпт для исправления'}), 400
+        
+        # Получаем OpenAI токен пользователя
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT openai_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        openai_token = user.get('openai_token') if user else None
+        conn.close()
+        
+        # Исправляем промпт
+        used_openai = False
+        if openai_token:
+            fixed = fix_prompt_with_openai(prompt, openai_token)
+            if fixed:
+                fixed_prompt = fixed
+                used_openai = True
+            else:
+                fixed_prompt = fix_prompt_errors(prompt, None)
+        else:
+            fixed_prompt = fix_prompt_errors(prompt, None)
+        
+        return jsonify({
+            'success': True,
+            'original': prompt,
+            'fixed': fixed_prompt,
+            'used_openai': used_openai
         })
         
     except Exception as e:
