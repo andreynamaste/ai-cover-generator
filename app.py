@@ -18,7 +18,17 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-super-secret-key-change-me-in-production-12345')
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30  # 30 дней
+# SESSION_COOKIE_SECURE только на HTTPS (проверяем по переменной окружения или hostname)
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Защита от XSS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Защита от CSRF
 CORS(app)
+
+# Устанавливаем SESSION_COOKIE_SECURE только если не localhost
+import socket
+hostname = socket.gethostname()
+if 'localhost' not in hostname and '127.0.0.1' not in hostname:
+    app.config['SESSION_COOKIE_SECURE'] = True
 
 # ============ GOOGLE OAUTH CONFIG ============
 # Для настройки Google OAuth:
@@ -272,6 +282,7 @@ def google_callback():
         
         if user:
             # Логиним существующего пользователя
+            session.permanent = True
             session['user_id'] = user['id']
             session['username'] = user['username']
             conn.close()
@@ -285,6 +296,7 @@ def google_callback():
             # Привязываем Google к существующему аккаунту
             c.execute('UPDATE users SET google_id = ? WHERE id = ?', (google_id, user['id']))
             conn.commit()
+            session.permanent = True
             session['user_id'] = user['id']
             session['username'] = user['username']
             conn.close()
@@ -305,6 +317,7 @@ def google_callback():
         user_id = c.lastrowid
         conn.close()
         
+        session.permanent = True
         session['user_id'] = user_id
         session['username'] = username
         
@@ -344,6 +357,7 @@ def register():
             user_id = c.lastrowid
             conn.close()
             
+            session.permanent = True
             session['user_id'] = user_id
             session['username'] = username
             
@@ -381,6 +395,7 @@ def login():
         conn.close()
         
         if user:
+            session.permanent = True
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect('/covers/')
