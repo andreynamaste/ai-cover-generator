@@ -1424,7 +1424,7 @@ def generate_comics():
         api_token = user['api_token']
         openai_token = user['openai_token'] if user and user['openai_token'] else None
         
-    data = request.json
+        data = request.json
         blocks_count = int(data.get('blocks', 3))  # 1-6 блоков
         style = data.get('style', 'cartoon')  # cartoon или realistic
         topic = data.get('topic', '').strip()
@@ -1612,7 +1612,7 @@ def generate_caricature():
         api_token = user['api_token']
         openai_token = user['openai_token'] if user and user['openai_token'] else None
         
-    data = request.json
+        data = request.json
         prompt = data.get('prompt', '').strip()
         image_urls = data.get('image_urls', [])
         
