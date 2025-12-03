@@ -668,9 +668,10 @@ def send_password_reset_email(email, reset_link):
         smtp_password = os.environ.get('SMTP_PASSWORD', '')
         
         if not smtp_user or not smtp_password:
-            # Если SMTP не настроен, просто логируем (в продакшене нужно настроить)
+            # Если SMTP не настроен, логируем и возвращаем False
             print(f"Password reset link for {email}: {reset_link}")
-            return True
+            print(f"SMTP not configured. Reset link: {reset_link}")
+            return False
         
         msg = MIMEMultipart()
         msg['From'] = smtp_user
@@ -735,7 +736,13 @@ def forgot_password():
             
             # Отправляем email
             reset_link = f"https://2msp.webversy.top/covers/reset-password?token={reset_token}"
-            send_password_reset_email(email, reset_link)
+            email_sent = send_password_reset_email(email, reset_link)
+            
+            # Если email не настроен, показываем ссылку на странице
+            if not email_sent:
+                return render_template('forgot-password.html', 
+                                     success=f'Ссылка для восстановления пароля (email не настроен, используйте эту ссылку):',
+                                     reset_link=reset_link)
             
             return render_template('forgot-password.html', 
                                  success='Ссылка для восстановления пароля отправлена на ваш email. Проверьте почту (включая папку "Спам").')
@@ -940,8 +947,13 @@ def generate_cover():
         style_config = DESIGN_STYLES.get(style, DESIGN_STYLES['modern'])
         format_config = IMAGE_FORMATS.get(image_format, IMAGE_FORMATS['realistic'])
         
+        # Добавляем информацию о фото в промпт если есть
+        photo_info = ""
+        if processed_urls:
+            photo_info = f", using {len(processed_urls)} reference photo(s) as style and content guide"
+        
         # Собираем полный промпт с форматом (исправленный)
-        full_prompt = f"{style_config['prompt_prefix']} {user_prompt}, {format_config['prompt_suffix']}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
+        full_prompt = f"{style_config['prompt_prefix']} {user_prompt}{photo_info}, {format_config['prompt_suffix']}, high quality, professional design, {size_config['width']}x{size_config['height']} pixels"
         
         headers = {
             'Authorization': f'Bearer {api_token}',
@@ -959,11 +971,12 @@ def generate_cover():
             }
         }
         
-        # Добавляем референсные изображения если есть
-        if image_urls:
+        # Добавляем референсные изображения если есть (ОБЯЗАТЕЛЬНО!)
+        if processed_urls:
             payload["input"]["image_prompts"] = [
-                {"url": url, "weight": 0.5} for url in image_urls
+                {"url": url, "weight": 0.7} for url in processed_urls
             ]
+            print(f"✅ Added {len(processed_urls)} reference images to generation")
         
         response = requests.post(
             f"{Config.KIE_API_URL}/createTask",
@@ -986,13 +999,16 @@ def generate_cover():
             conn.commit()
             conn.close()
             
-            return jsonify({
+            response_data = {
                 'success': True,
                 'taskId': result['data']['taskId'],
                 'platform': platform,
+                'images_used': len(processed_urls) if processed_urls else 0,
+                'image_urls': processed_urls if processed_urls else [],
                 'size': f"{size_config['width']}x{size_config['height']}",
-                'message': 'Задача создана! Генерация началась...'
-            })
+                'message': f'Задача создана! Генерация началась... {"✅ Используется " + str(len(processed_urls)) + " фото" if processed_urls else ""}'
+            }
+            return jsonify(response_data)
         else:
             error_msg = result.get('msg', 'API Error')
             if result.get('code') == 401:
@@ -1202,6 +1218,297 @@ def get_sizes():
 @app.route('/covers/api/styles')
 def get_styles():
     return jsonify(DESIGN_STYLES)
+
+
+@app.route('/covers/comics')
+@login_required
+def comics_page():
+    """Страница генерации комиксов"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT api_token, openai_token FROM users WHERE id = ?', (session['user_id'],))
+    user = c.fetchone()
+    conn.close()
+    
+    has_token = bool(user and user['api_token'])
+    
+    return render_template('comics.html',
+                         username=session.get('username'),
+                         has_token=has_token,
+                         google_enabled=bool(google))
+
+
+@app.route('/covers/caricature')
+@login_required
+def caricature_page():
+    """Страница генерации карикатур"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT api_token, openai_token FROM users WHERE id = ?', (session['user_id'],))
+    user = c.fetchone()
+    conn.close()
+    
+    has_token = bool(user and user['api_token'])
+    
+    return render_template('caricature.html',
+                         username=session.get('username'),
+                         has_token=has_token,
+                         google_enabled=bool(google))
+
+
+@app.route('/api/generate-comics', methods=['POST'])
+@app.route('/covers/api/generate-comics', methods=['POST'])
+@login_required
+def generate_comics():
+    """Генерация комиксов (1-6 блоков)"""
+    try:
+        # Получаем токены пользователя
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT api_token, openai_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user or not user['api_token']:
+            return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
+        
+        api_token = user['api_token']
+        openai_token = user.get('openai_token') if user else None
+        
+        data = request.json
+        blocks_count = int(data.get('blocks', 3))  # 1-6 блоков
+        style = data.get('style', 'cartoon')  # cartoon или realistic
+        topic = data.get('topic', '').strip()
+        description = data.get('description', '').strip()
+        image_urls = data.get('image_urls', [])
+        
+        if not topic:
+            return jsonify({'error': 'Введите тему комикса'}), 400
+        
+        # Генерируем промпты для каждого блока
+        comics_prompts = []
+        if openai_token:
+            # Используем OpenAI для генерации сценария
+            try:
+                headers = {
+                    'Authorization': f'Bearer {openai_token}',
+                    'Content-Type': 'application/json'
+                }
+                
+                system_prompt = f"""Создай сценарий для комикса из {blocks_count} кадров на тему: {topic}.
+                {'Описание: ' + description if description else ''}
+                
+                Верни ТОЛЬКО список из {blocks_count} промптов, каждый на отдельной строке.
+                Каждый промпт должен описывать один кадр комикса.
+                Промпты должны быть короткими (до 20 слов), понятными для генерации изображения.
+                Формат: просто список промптов, каждый с новой строки."""
+                
+                payload = {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Создай сценарий комикса на тему: {topic}"}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 500
+                }
+                
+                response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    headers=headers,
+                    json=payload,
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    generated_text = result['choices'][0]['message']['content'].strip()
+                    comics_prompts = [p.strip() for p in generated_text.split('\n') if p.strip()][:blocks_count]
+            except Exception as e:
+                print(f"OpenAI error for comics: {e}")
+        
+        # Если OpenAI не сработал, генерируем простые промпты
+        if not comics_prompts or len(comics_prompts) < blocks_count:
+            for i in range(blocks_count):
+                prompt = f"{topic}, scene {i+1}"
+                if description:
+                    prompt += f", {description}"
+                comics_prompts.append(prompt)
+        
+        # Формируем финальные промпты с учетом стиля и фото
+        style_prefix = "cartoon style, comic book, vibrant colors, " if style == 'cartoon' else "realistic style, photorealistic, "
+        
+        final_prompts = []
+        for i, prompt in enumerate(comics_prompts):
+            final_prompt = f"{prompt}, {style_prefix}comic panel {i+1} of {blocks_count}"
+            
+            # Добавляем ссылки на фото если есть
+            if image_urls:
+                photo_refs = ", ".join([f"reference image {j+1}: {url}" for j, url in enumerate(image_urls[:6]) if url.strip()])
+                if photo_refs:
+                    final_prompt += f", {photo_refs}"
+            
+            final_prompts.append(final_prompt)
+        
+        # Генерируем изображения для каждого блока
+        task_ids = []
+        for i, prompt in enumerate(final_prompts):
+            # Исправляем промпт
+            fixed_prompt = fix_prompt_errors(prompt, openai_token)
+            
+            # Создаём задачу генерации
+            payload = {
+                "prompt": fixed_prompt,
+                "width": 1024,
+                "height": 1024,
+                "num_inference_steps": 30,
+                "guidance_scale": 7.5
+            }
+            
+            # Добавляем reference images если есть
+            if image_urls:
+                ref_images = [url for url in image_urls[:6] if url.strip()]
+                if ref_images:
+                    payload["reference_images"] = ref_images
+            
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(
+                Config.KIE_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                task_data = response.json()
+                task_id = task_data.get('task_id')
+                if task_id:
+                    task_ids.append({
+                        'block': i + 1,
+                        'task_id': task_id,
+                        'prompt': fixed_prompt
+                    })
+        
+        if not task_ids:
+            return jsonify({'error': 'Не удалось создать задачи генерации'}), 500
+        
+        # Сохраняем в БД
+        conn = get_db()
+        c = conn.cursor()
+        for task_info in task_ids:
+            c.execute('''
+                INSERT INTO generations (user_id, task_id, platform, style, prompt, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (session['user_id'], task_info['task_id'], 'comics', style, task_info['prompt'], 'processing'))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'blocks': blocks_count,
+            'task_ids': task_ids,
+            'message': f'Генерация комикса из {blocks_count} блоков начата!'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/generate-caricature', methods=['POST'])
+@app.route('/covers/api/generate-caricature', methods=['POST'])
+@login_required
+def generate_caricature():
+    """Генерация карикатуры"""
+    try:
+        # Получаем токены пользователя
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT api_token, openai_token FROM users WHERE id = ?', (session['user_id'],))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user or not user['api_token']:
+            return jsonify({'error': 'API токен не настроен. Перейдите в настройки.'}), 400
+        
+        api_token = user['api_token']
+        openai_token = user.get('openai_token') if user else None
+        
+    data = request.json
+        prompt = data.get('prompt', '').strip()
+        image_urls = data.get('image_urls', [])
+        
+        if not prompt:
+            return jsonify({'error': 'Введите описание карикатуры'}), 400
+        
+        # Формируем промпт для карикатуры
+        caricature_prompt = f"caricature style, {prompt}, exaggerated features, humorous, cartoon portrait, single character, full body or portrait"
+        
+        # Добавляем ссылки на фото если есть
+        if image_urls:
+            photo_refs = ", ".join([f"reference image {j+1}: {url}" for j, url in enumerate(image_urls[:6]) if url.strip()])
+            if photo_refs:
+                caricature_prompt += f", {photo_refs}, use these reference images to create caricature"
+        
+        # Исправляем промпт
+        fixed_prompt = fix_prompt_errors(caricature_prompt, openai_token)
+        
+        # Создаём задачу генерации
+        payload = {
+            "prompt": fixed_prompt,
+            "width": 1024,
+            "height": 1024,
+            "num_inference_steps": 30,
+            "guidance_scale": 7.5
+        }
+        
+        # Добавляем reference images если есть
+        if image_urls:
+            ref_images = [url for url in image_urls[:6] if url.strip()]
+            if ref_images:
+                payload["reference_images"] = ref_images
+        
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            Config.KIE_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            task_data = response.json()
+            task_id = task_data.get('task_id')
+            
+            if task_id:
+                # Сохраняем в БД
+                conn = get_db()
+                c = conn.cursor()
+                c.execute('''
+                    INSERT INTO generations (user_id, task_id, platform, style, prompt, status)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (session['user_id'], task_id, 'caricature', 'caricature', fixed_prompt, 'processing'))
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'task_id': task_id,
+                    'prompt': fixed_prompt,
+                    'message': 'Генерация карикатуры начата!'
+                })
+        
+        return jsonify({'error': 'Не удалось создать задачу генерации'}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

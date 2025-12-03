@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 Генератор Комиксов - AI Cover Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --accent: #06b6d4;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --error: #ef4444;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--dark);
+            min-height: 100vh;
+            color: var(--white);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .card {
+            background: var(--dark-light);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--white);
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .blocks-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .block-btn {
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .block-btn:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .block-btn.active {
+            border-color: var(--secondary);
+            background: rgba(236, 72, 153, 0.2);
+        }
+        
+        .style-selector {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .style-btn {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .style-btn:hover {
+            border-color: var(--primary);
+        }
+        
+        .style-btn.active {
+            border-color: var(--secondary);
+            background: rgba(236, 72, 153, 0.2);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 12px;
+            color: var(--white);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .result {
+            margin-top: 30px;
+        }
+        
+        .comics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .comic-panel {
+            background: var(--dark);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .comic-panel img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .photo-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .photo-input {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .photo-input input {
+            width: 100%;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/covers/" class="back-link">← Назад к генератору обложек</a>
+        
+        <div class="header">
+            <h1>📚 Генератор Комиксов</h1>
+            <p>Создайте комикс из 1-6 блоков в карикатурном или реалистичном стиле</p>
+        </div>
+        
+        {% if not has_token %}
+        <div class="error">
+            ⚠️ Для генерации комиксов необходимо добавить API токен в <a href="/covers/settings" style="color: var(--accent);">настройках</a>
+        </div>
+        {% endif %}
+        
+        <div class="card">
+            <form id="comicsForm">
+                <div class="form-group">
+                    <label>📝 Количество блоков (1-6)</label>
+                    <div class="blocks-selector">
+                        <button type="button" class="block-btn" data-blocks="1">1 блок</button>
+                        <button type="button" class="block-btn" data-blocks="2">2 блока</button>
+                        <button type="button" class="block-btn active" data-blocks="3">3 блока</button>
+                        <button type="button" class="block-btn" data-blocks="4">4 блока</button>
+                        <button type="button" class="block-btn" data-blocks="5">5 блоков</button>
+                        <button type="button" class="block-btn" data-blocks="6">6 блоков</button>
+                    </div>
+                    <input type="hidden" id="blocks" name="blocks" value="3">
+                </div>
+                
+                <div class="form-group">
+                    <label>🎨 Стиль комикса</label>
+                    <div class="style-selector">
+                        <button type="button" class="style-btn active" data-style="cartoon">
+                            🎭 Карикатурный<br><small>Мультяшный стиль</small>
+                        </button>
+                        <button type="button" class="style-btn" data-style="realistic">
+                            📷 Реалистичный<br><small>Фотореалистичный</small>
+                        </button>
+                    </div>
+                    <input type="hidden" id="style" name="style" value="cartoon">
+                </div>
+                
+                <div class="form-group">
+                    <label>📖 Тема комикса</label>
+                    <input type="text" id="topic" name="topic" placeholder="Например: приключения супергероя" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>📝 Описание (опционально)</label>
+                    <textarea id="description" name="description" rows="3" placeholder="Дополнительные детали для сценария..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>📸 Референсные фото (до 6 штук, опционально)</label>
+                    <div class="photo-inputs">
+                        <div class="photo-input">
+                            <input type="url" id="photo1" placeholder="Фото 1 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo2" placeholder="Фото 2 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo3" placeholder="Фото 3 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo4" placeholder="Фото 4 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo5" placeholder="Фото 5 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo6" placeholder="Фото 6 (URL)">
+                        </div>
+                    </div>
+                    <small style="color: var(--gray); margin-top: 10px; display: block;">
+                        Используйте прямые ссылки на изображения или загрузите через генератор обложек
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn" {% if not has_token %}disabled{% endif %}>
+                    🚀 Сгенерировать комикс
+                </button>
+            </form>
+        </div>
+        
+        <div id="result" class="result" style="display: none;">
+            <div class="card">
+                <h2>🎨 Результат генерации</h2>
+                <div id="comicsGrid" class="comics-grid"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedBlocks = 3;
+        let selectedStyle = 'cartoon';
+        
+        // Выбор количества блоков
+        document.querySelectorAll('.block-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.block-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                selectedBlocks = parseInt(this.dataset.blocks);
+                document.getElementById('blocks').value = selectedBlocks;
+            });
+        });
+        
+        // Выбор стиля
+        document.querySelectorAll('.style-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                selectedStyle = this.dataset.style;
+                document.getElementById('style').value = selectedStyle;
+            });
+        });
+        
+        // Отправка формы
+        document.getElementById('comicsForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const topic = document.getElementById('topic').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const image_urls = [];
+            
+            for (let i = 1; i <= 6; i++) {
+                const url = document.getElementById('photo' + i).value.trim();
+                if (url) image_urls.push(url);
+            }
+            
+            const btn = this.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '⏳ Генерирую...';
+            
+            try {
+                const response = await fetch('/covers/api/generate-comics', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        blocks: selectedBlocks,
+                        style: selectedStyle,
+                        topic: topic,
+                        description: description,
+                        image_urls: image_urls
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Показываем результат
+                    document.getElementById('result').style.display = 'block';
+                    const grid = document.getElementById('comicsGrid');
+                    grid.innerHTML = '<p>Генерация начата! Проверяйте статус задач...</p>';
+                    
+                    // Можно добавить проверку статуса
+                    alert('✅ Генерация комикса начата! Проверьте историю генераций.');
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Сгенерировать комикс';
+            }
+        });
+    </script>
+</body>
+</html>
+

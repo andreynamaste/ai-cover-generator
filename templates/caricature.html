@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 Генератор Карикатур - AI Cover Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --accent: #06b6d4;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --error: #ef4444;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--dark);
+            min-height: 100vh;
+            color: var(--white);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .card {
+            background: var(--dark-light);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--white);
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: var(--white);
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 12px;
+            color: var(--white);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .photo-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .photo-input {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .photo-input input {
+            width: 100%;
+        }
+        
+        .result {
+            margin-top: 30px;
+        }
+        
+        .result img {
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .info-box {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/covers/" class="back-link">← Назад к генератору обложек</a>
+        
+        <div class="header">
+            <h1>🎭 Генератор Карикатур</h1>
+            <p>Создайте карикатуру на основе описания и фото</p>
+        </div>
+        
+        {% if not has_token %}
+        <div class="error">
+            ⚠️ Для генерации карикатур необходимо добавить API токен в <a href="/covers/settings" style="color: var(--accent);">настройках</a>
+        </div>
+        {% endif %}
+        
+        <div class="card">
+            <form id="caricatureForm">
+                <div class="form-group">
+                    <label>📝 Описание карикатуры</label>
+                    <textarea id="prompt" name="prompt" rows="4" placeholder="Опишите кого и как нарисовать. Например: 'Мужчина с большими глазами и улыбкой, в костюме, карикатурный стиль'" required></textarea>
+                    <div class="info-box">
+                        <strong>💡 Подсказка:</strong> Опишите человека, его особенности, одежду, позу. Нейросеть создаст карикатуру с преувеличенными чертами.
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>📸 Референсные фото (до 6 штук, опционально)</label>
+                    <p style="color: var(--gray); margin-bottom: 10px; font-size: 0.9rem;">
+                        Загрузите фото человека для создания карикатуры. Можно использовать до 6 фотографий для лучшего результата.
+                    </p>
+                    <div class="photo-inputs">
+                        <div class="photo-input">
+                            <input type="url" id="photo1" placeholder="Фото 1 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo2" placeholder="Фото 2 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo3" placeholder="Фото 3 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo4" placeholder="Фото 4 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo5" placeholder="Фото 5 (URL)">
+                        </div>
+                        <div class="photo-input">
+                            <input type="url" id="photo6" placeholder="Фото 6 (URL)">
+                        </div>
+                    </div>
+                    <small style="color: var(--gray); margin-top: 10px; display: block;">
+                        Используйте прямые ссылки на изображения или загрузите через генератор обложек
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn" {% if not has_token %}disabled{% endif %}>
+                    🎨 Сгенерировать карикатуру
+                </button>
+            </form>
+        </div>
+        
+        <div id="result" class="result" style="display: none;">
+            <div class="card">
+                <h2>🎭 Результат генерации</h2>
+                <div id="resultContent"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('caricatureForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const prompt = document.getElementById('prompt').value.trim();
+            const image_urls = [];
+            
+            for (let i = 1; i <= 6; i++) {
+                const url = document.getElementById('photo' + i).value.trim();
+                if (url) image_urls.push(url);
+            }
+            
+            const btn = this.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '⏳ Генерирую...';
+            
+            try {
+                const response = await fetch('/covers/api/generate-caricature', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        image_urls: image_urls
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('resultContent').innerHTML = `
+                        <div class="success">
+                            ✅ Генерация карикатуры начата!<br>
+                            ID задачи: ${data.task_id}<br>
+                            ${image_urls.length > 0 ? '✅ Используется ' + image_urls.length + ' фото' : ''}
+                        </div>
+                        <p style="margin-top: 15px; color: var(--gray);">
+                            Проверьте статус генерации в <a href="/covers/history" style="color: var(--accent);">истории</a>
+                        </p>
+                    `;
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎨 Сгенерировать карикатуру';
+            }
+        });
+    </script>
+</body>
+</html>
+
