@@ -1021,6 +1021,31 @@ def generate_cover():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/stop/<task_id>', methods=['POST'])
+@app.route('/covers/api/stop/<task_id>', methods=['POST'])
+@login_required
+def stop_generation(task_id):
+    """Остановка генерации (помечает задачу как отменённую)"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        # Проверяем что задача принадлежит пользователю
+        c.execute('SELECT * FROM generations WHERE task_id = ? AND user_id = ?', (task_id, session['user_id']))
+        generation = c.fetchone()
+        
+        if generation:
+            # Обновляем статус на cancelled
+            c.execute('UPDATE generations SET status = ? WHERE task_id = ?', ('cancelled', task_id))
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True, 'message': 'Генерация остановлена'})
+        else:
+            conn.close()
+            return jsonify({'error': 'Задача не найдена'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/status/<task_id>')
 @app.route('/covers/api/status/<task_id>')
 @login_required
@@ -1330,7 +1355,7 @@ def generate_comics():
         api_token = user['api_token']
         openai_token = user['openai_token'] if user and user['openai_token'] else None
         
-        data = request.json
+    data = request.json
         blocks_count = int(data.get('blocks', 3))  # 1-6 блоков
         style = data.get('style', 'cartoon')  # cartoon или realistic
         topic = data.get('topic', '').strip()
@@ -1518,7 +1543,7 @@ def generate_caricature():
         api_token = user['api_token']
         openai_token = user['openai_token'] if user and user['openai_token'] else None
         
-        data = request.json
+    data = request.json
         prompt = data.get('prompt', '').strip()
         image_urls = data.get('image_urls', [])
         

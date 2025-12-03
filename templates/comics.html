@@ -312,9 +312,14 @@
                     </small>
                 </div>
                 
-                <button type="submit" class="btn" {% if not has_token %}disabled{% endif %}>
-                    🚀 Сгенерировать комикс
-                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn" id="generate-btn" {% if not has_token %}disabled{% endif %}>
+                        🚀 Сгенерировать комикс
+                    </button>
+                    <button type="button" class="btn" id="stop-btn" style="display: none; background: #ef4444; padding: 16px 24px;">
+                        ⏹️ Остановить
+                    </button>
+                </div>
             </form>
         </div>
         
@@ -350,10 +355,30 @@
             });
         });
         
+        let currentTaskIds = [];
+        let isStopped = false;
+        
+        // Кнопка остановки
+        document.getElementById('stop-btn').addEventListener('click', async function() {
+            isStopped = true;
+            for (const taskId of currentTaskIds) {
+                try {
+                    await fetch(`/covers/api/stop/${taskId}`, { method: 'POST' });
+                } catch (e) {
+                    console.log('Stop request failed:', e);
+                }
+            }
+            document.getElementById('generate-btn').disabled = false;
+            document.getElementById('stop-btn').style.display = 'none';
+            currentTaskIds = [];
+            alert('Генерация остановлена');
+        });
+        
         // Отправка формы
         document.getElementById('comicsForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            isStopped = false;
             const topic = document.getElementById('topic').value.trim();
             const description = document.getElementById('description').value.trim();
             const image_urls = [];
@@ -363,9 +388,10 @@
                 if (url) image_urls.push(url);
             }
             
-            const btn = this.querySelector('button[type="submit"]');
+            const btn = document.getElementById('generate-btn');
             btn.disabled = true;
             btn.textContent = '⏳ Генерирую...';
+            document.getElementById('stop-btn').style.display = 'block';
             
             try {
                 const response = await fetch('/covers/api/generate-comics', {
@@ -382,22 +408,28 @@
                 
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success && !isStopped) {
+                    currentTaskIds = data.task_ids.map(t => t.task_id);
                     // Показываем результат
                     document.getElementById('result').style.display = 'block';
                     const grid = document.getElementById('comicsGrid');
                     grid.innerHTML = '<p>Генерация начата! Проверяйте статус задач...</p>';
                     
-                    // Можно добавить проверку статуса
                     alert('✅ Генерация комикса начата! Проверьте историю генераций.');
-                } else {
+                } else if (!isStopped) {
                     alert('❌ Ошибка: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
+                if (!isStopped) {
+                    alert('❌ Ошибка: ' + error.message);
+                }
             } finally {
-                btn.disabled = false;
-                btn.textContent = '🚀 Сгенерировать комикс';
+                if (!isStopped) {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Сгенерировать комикс';
+                    document.getElementById('stop-btn').style.display = 'none';
+                }
+                currentTaskIds = [];
             }
         });
     </script>

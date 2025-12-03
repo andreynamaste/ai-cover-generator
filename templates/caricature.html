@@ -227,9 +227,14 @@
                     </small>
                 </div>
                 
-                <button type="submit" class="btn" {% if not has_token %}disabled{% endif %}>
-                    🎨 Сгенерировать карикатуру
-                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn" id="generate-btn" {% if not has_token %}disabled{% endif %}>
+                        🎨 Сгенерировать карикатуру
+                    </button>
+                    <button type="button" class="btn" id="stop-btn" style="display: none; background: #ef4444; padding: 16px 24px;">
+                        ⏹️ Остановить
+                    </button>
+                </div>
             </form>
         </div>
         
@@ -242,9 +247,29 @@
     </div>
     
     <script>
+        let currentTaskId = null;
+        let isStopped = false;
+        
+        // Кнопка остановки
+        document.getElementById('stop-btn').addEventListener('click', async function() {
+            if (currentTaskId) {
+                isStopped = true;
+                try {
+                    await fetch(`/covers/api/stop/${currentTaskId}`, { method: 'POST' });
+                } catch (e) {
+                    console.log('Stop request failed:', e);
+                }
+                document.getElementById('generate-btn').disabled = false;
+                document.getElementById('stop-btn').style.display = 'none';
+                currentTaskId = null;
+                alert('Генерация остановлена');
+            }
+        });
+        
         document.getElementById('caricatureForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            isStopped = false;
             const prompt = document.getElementById('prompt').value.trim();
             const image_urls = [];
             
@@ -253,9 +278,10 @@
                 if (url) image_urls.push(url);
             }
             
-            const btn = this.querySelector('button[type="submit"]');
+            const btn = document.getElementById('generate-btn');
             btn.disabled = true;
             btn.textContent = '⏳ Генерирую...';
+            document.getElementById('stop-btn').style.display = 'block';
             
             try {
                 const response = await fetch('/covers/api/generate-caricature', {
@@ -269,26 +295,33 @@
                 
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success && !isStopped) {
+                    currentTaskId = data.taskId;
                     document.getElementById('result').style.display = 'block';
                     document.getElementById('resultContent').innerHTML = `
                         <div class="success">
                             ✅ Генерация карикатуры начата!<br>
-                            ID задачи: ${data.task_id}<br>
+                            ID задачи: ${data.taskId}<br>
                             ${image_urls.length > 0 ? '✅ Используется ' + image_urls.length + ' фото' : ''}
                         </div>
                         <p style="margin-top: 15px; color: var(--gray);">
                             Проверьте статус генерации в <a href="/covers/history" style="color: var(--accent);">истории</a>
                         </p>
                     `;
-                } else {
+                } else if (!isStopped) {
                     alert('❌ Ошибка: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
+                if (!isStopped) {
+                    alert('❌ Ошибка: ' + error.message);
+                }
             } finally {
-                btn.disabled = false;
-                btn.textContent = '🎨 Сгенерировать карикатуру';
+                if (!isStopped) {
+                    btn.disabled = false;
+                    btn.textContent = '🎨 Сгенерировать карикатуру';
+                    document.getElementById('stop-btn').style.display = 'none';
+                }
+                currentTaskId = null;
             }
         });
     </script>

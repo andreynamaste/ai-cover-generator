@@ -1132,10 +1132,15 @@
                         <span>🤖 Powered by <strong>Nano Banana Pro</strong> (Kie.ai)</span>
                 </div>
                 
-                    <button class="generate-btn" id="generate-btn" {% if not has_token %}disabled{% endif %}>
-                        <span>✨</span>
-                        <span>Сгенерировать обложку</span>
-                    </button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="generate-btn" id="generate-btn" {% if not has_token %}disabled{% endif %}>
+                            <span>✨</span>
+                            <span>Сгенерировать обложку</span>
+                        </button>
+                        <button class="stop-btn" id="stop-btn" style="display: none; padding: 16px 24px; background: #ef4444; border: none; border-radius: 12px; color: white; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+                            <span>⏹️ Остановить</span>
+                        </button>
+                    </div>
                                 </div>
                 
                 <!-- Result -->
@@ -1419,6 +1424,37 @@
         // Attach generate prompt button
         document.getElementById('generate-prompt-btn').addEventListener('click', generatePrompt);
         
+        // Variables for stop functionality
+        let currentTaskId = null;
+        let statusCheckInterval = null;
+        let isStopped = false;
+        
+        // Stop button handler
+        document.getElementById('stop-btn').addEventListener('click', async () => {
+            if (currentTaskId) {
+                isStopped = true;
+                if (statusCheckInterval) {
+                    clearInterval(statusCheckInterval);
+                    statusCheckInterval = null;
+                }
+                
+                // Try to cancel task on server
+                try {
+                    await fetch(`/covers/api/stop/${currentTaskId}`, { method: 'POST' });
+                } catch (e) {
+                    console.log('Stop request failed:', e);
+                }
+                
+                // Reset UI
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('generate-btn').disabled = false;
+                document.getElementById('stop-btn').style.display = 'none';
+                document.getElementById('result-placeholder').style.display = 'flex';
+                currentTaskId = null;
+                alert('Генерация остановлена');
+            }
+        });
+        
         // Generate button
         document.getElementById('generate-btn').addEventListener('click', async () => {
             const prompt = document.getElementById('prompt').value.trim();
@@ -1427,6 +1463,9 @@
                 alert('Пожалуйста, опишите желаемую обложку');
                 return;
             }
+            
+            // Reset stop flag
+            isStopped = false;
             
             // Get reference image URLs
             const imageUrls = getImageUrls();
@@ -1437,6 +1476,7 @@
             document.getElementById('error-message').style.display = 'none';
             document.getElementById('loading').style.display = 'flex';
             document.getElementById('generate-btn').disabled = true;
+            document.getElementById('stop-btn').style.display = 'block';
             
             try {
                 // Create task with image URLs and format
@@ -1459,18 +1499,22 @@
                 }
                 
                 // Poll for result
-                const taskId = data.taskId;
+                currentTaskId = data.taskId;
                 document.getElementById('loading-text').textContent = 'Генерация... Это может занять 30-60 секунд';
                 
                 let attempts = 0;
                 const maxAttempts = 60;
                 
                 const checkStatus = async () => {
+                    if (isStopped) {
+                        return;
+                    }
+                    
                     if (attempts >= maxAttempts) {
                         throw new Error('Превышено время ожидания. Попробуйте снова.');
                     }
                     
-                    const statusResponse = await fetch(`/covers/api/status/${taskId}`);
+                    const statusResponse = await fetch(`/covers/api/status/${currentTaskId}`);
                     const statusData = await statusResponse.json();
                     
                     if (statusData.state === 'success' && statusData.imageUrl) {
@@ -1480,22 +1524,38 @@
                         document.getElementById('generated-image').src = statusData.imageUrl;
                         document.getElementById('download-link').href = statusData.imageUrl;
                         document.getElementById('generate-btn').disabled = false;
+                        document.getElementById('stop-btn').style.display = 'none';
+                        currentTaskId = null;
+                        if (statusCheckInterval) {
+                            clearInterval(statusCheckInterval);
+                            statusCheckInterval = null;
+                        }
                     } else if (statusData.state === 'fail') {
                         throw new Error(statusData.error || 'Генерация не удалась');
                     } else {
                         // Still processing
                         attempts++;
-                        setTimeout(checkStatus, 2000);
+                        if (!isStopped) {
+                            statusCheckInterval = setTimeout(checkStatus, 2000);
+                        }
                     }
                 };
                 
                 await checkStatus();
                 
             } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error-message').style.display = 'block';
-                document.getElementById('error-text').textContent = error.message;
+                if (!isStopped) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error-message').style.display = 'block';
+                    document.getElementById('error-text').textContent = error.message;
+                }
                 document.getElementById('generate-btn').disabled = false;
+                document.getElementById('stop-btn').style.display = 'none';
+                currentTaskId = null;
+                if (statusCheckInterval) {
+                    clearInterval(statusCheckInterval);
+                    statusCheckInterval = null;
+                }
             }
         });
         
